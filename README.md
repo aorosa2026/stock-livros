@@ -26,6 +26,7 @@ nem carregar em "sair" enquanto houver registos por enviar.
 - **Leituras e outros** — PNL, inglês de leitura extensiva, pré-escolar… preenchida à mão.
 - **Correções** — ISBN errados no site do colégio e o ISBN certo (aplicadas ao gerar a lista).
 - **Lista** — gerada pelo menu *📚 Manuais → Gerar lista*. É a lista que a página usa.
+- **Edições antigas** — livros com ISBN de edições anteriores, registados pela página quando se lê um ISBN que não está na lista. Coluna *Estado*: Por confirmar / Aprovado / Recusado (confirmação com o professor). Não é apagada pelas atualizações do site. Na página aparecem no separador **🕰 Antigas**.
 - **Avisos** — problemas encontrados ao gerar a lista (❌ erro, 🧹 correção sem efeito, 🔎 verificar).
 - **Movimentos** — cada entrada ou saída (data, ISBN, parte, quantidade, quem registou, ID, Entrada/Saída). As saídas têm quantidade negativa.
 - **Stock** — total por ISBN e parte (fórmula, não editar).

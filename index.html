@@ -61,6 +61,18 @@
   .lista .n { font-weight:700; white-space:nowrap; text-align:right; font-size:.9rem; }
   .lista .n.zero { color:#b4432f; }
   .lista .grupo { background:none; border:0; padding:12px 2px 4px; cursor:default; font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .badge { display:inline-block; min-width:18px; padding:1px 6px; border-radius:999px; background:#d98a00; color:#fff; font-size:.75rem; }
+  .estado.antiga { background:#fff6db; color:#7a5a00; }
+  .estado.aprovado { background:var(--ok); color:#155443; }
+  .estado.recusado { background:var(--no); color:#8a2c1f; }
+  .tag { display:inline-block; font-size:.72rem; padding:1px 7px; border-radius:999px; margin-left:4px; vertical-align:middle; }
+  .tag.Por { background:#fff0c2; color:#7a5a00; } .tag.Aprovado { background:var(--ok); color:#155443; } .tag.Recusado { background:var(--no); color:#8a2c1f; }
+  .form label { display:block; font-size:.9rem; margin-top:10px; color:var(--muted); }
+  .form input, .form select { width:100%; padding:12px; font-size:1rem; border:1px solid var(--line); border-radius:10px; margin-top:4px; background:#fff; color:var(--ink); }
+  .linha-btns { display:flex; gap:8px; margin-top:12px; }
+  .linha-btns .btn { flex:1; }
+  .btn-sec { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .notas { white-space:pre-line; font-size:.85rem; color:var(--muted); background:#faf8f4; border-radius:8px; padding:8px 10px; margin-top:10px; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -74,7 +86,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 4</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 5</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -82,7 +94,8 @@
     <header><h1>📚 Stock de Manuais</h1><button class="sair" id="btnSair">sair</button></header>
     <nav class="tabs">
       <button id="tabLeitura" class="tab sel">📷 Leitura</button>
-      <button id="tabLista" class="tab">📋 Lista por ano</button>
+      <button id="tabLista" class="tab">📋 Por ano</button>
+      <button id="tabAntigas" class="tab">🕰 Antigas <span id="nAntigas" class="badge hidden"></span></button>
     </nav>
     <p id="fila" class="fila hidden"></p>
 
@@ -106,8 +119,15 @@
       <ul id="listaAno" class="lista"></ul>
     </div>
 
+    <!-- Vista: edições antigas -->
+    <div id="vistaAntigas" class="hidden">
+      <p class="meta">Livros com ISBN de edições anteriores. Têm de ser confirmados com o professor antes de serem usados.
+        Para registar um novo, lê o código (ou escreve o ISBN) no separador Leitura.</p>
+      <ul id="listaAntigas" class="lista"></ul>
+    </div>
+
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 4 · stock nunca abaixo de 0</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 5 · edições antigas</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -164,6 +184,7 @@ function mostrarApp(d, nome, atualizado) {
   if (atualizado) lerFila().forEach(m => m.partes.forEach(p => {
     const k = m.isbn + '|' + p; STOCK[k] = (STOCK[k] || 0) + m.qtd; }));
   mostrarFila();
+  contarAntigas();
   document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome +
     (atualizado ? '' : ' · a atualizar…');
   document.getElementById('ecraEntrada').classList.add('hidden');
@@ -287,7 +308,9 @@ campo.addEventListener('input', () => {
       : palavras.every(p => textoPesquisa(l).includes(p)));
   encontrados.slice(0, 25).forEach(l => {
       const li = document.createElement('li');
-      li.innerHTML = esc(l.titulo) + '<small>' + realce(l.isbn, soNum ? q : '') + ' · ' +
+      li.innerHTML = esc(l.titulo) +
+        (l.antiga ? ' <span class="tag ' + l.estado.split(' ')[0] + '">🕰 ' + esc(l.estado.toLowerCase()) + '</span>' : '') +
+        '<small>' + realce(l.isbn, soNum ? q : '') + ' · ' +
         esc([l.disciplina, l.anos.join(', ')].filter(Boolean).join(' · ')) + '</small>';
       li.onclick = () => { ul.innerHTML = ''; campo.value = ''; mostrar(l, l.isbn); };
       ul.appendChild(li);
@@ -312,19 +335,34 @@ function procurar(isbn) { mostrar(LIVROS.find(l => l.isbn === isbn) || null, isb
 /* ---------- Ficha do livro ---------- */
 let modo = 'entrada';   // 'entrada' ou 'saida'
 
+function cabecalhoEstado(l) {
+  if (!l.antiga) return '<div class="estado ok">✔ Está na lista</div>';
+  if (l.estado === 'Aprovado') return '<div class="estado aprovado">🕰 Edição antiga · ✔ aprovada pelo professor</div>';
+  if (l.estado === 'Recusado') return '<div class="estado recusado">🕰 Edição antiga · ✖ recusada pelo professor</div>';
+  return '<div class="estado antiga">🕰 Edição antiga · por confirmar com o professor</div>';
+}
+
 function mostrar(livro, isbn) {
   mudarVista('leitura');
-  atual = livro ? livro : { isbn, titulo: '(fora da lista)', disciplina: '', tipo: '', anos: [], partes: 1, fora: true };
+  if (!livro) { mostrarNaoExiste(isbn); return; }
+  atual = livro;
   sel = new Set(); qtd = 1; modo = 'entrada';
   const f = document.getElementById('ficha');
   const partes = nomesPartes(atual.partes);
   if (partes.length === 1) sel.add(partes[0]);
+  const substitui = atual.equivale && LIVROS.find(l => l.isbn === atual.equivale);
 
   f.innerHTML =
-    (livro ? '<div class="estado ok">✔ Está na lista</div>' : '<div class="estado no">✖ Não está na lista</div>') +
+    cabecalhoEstado(atual) +
     '<strong>' + esc(atual.titulo) + '</strong>' +
     '<div class="meta">ISBN ' + esc(isbn) +
-      esc([atual.disciplina, atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) + '</div>' +
+      esc([atual.disciplina, atual.antiga ? '' : atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) +
+      (substitui ? '<br>Substitui: ' + esc(substitui.titulo) : '') + '</div>' +
+    (atual.antiga ?
+      '<div class="linha-btns"><button id="bAprov" class="btn btn-sec">✔ Professor aprovou</button>' +
+      '<button id="bRecus" class="btn btn-sec">✖ Professor recusou</button></div>' +
+      (atual.notas ? '<div class="notas">' + esc(atual.notas) + '</div>' : '') +
+      '<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">' : '') +
     '<div class="mov"><button id="mEntrada" class="entrada sel">＋ Entrada</button><button id="mSaida" class="saida">－ Saída</button></div>' +
     (partes.length > 1 ? '<div>Que parte?</div><div class="chips" id="chips"></div>' : '') +
     '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="stock">unidade(s)</span></div>' +
@@ -352,8 +390,139 @@ function mostrar(livro, isbn) {
   document.getElementById('menos').onclick = () => { qtd = Math.max(1, qtd - 1); document.getElementById('nq').textContent = qtd; };
   document.getElementById('mais').onclick = () => { qtd++; document.getElementById('nq').textContent = qtd; };
   document.getElementById('btnAdd').onclick = adicionar;
+  if (atual.antiga) {
+    document.getElementById('bAprov').onclick = () => mudarEstadoAntiga('Aprovado');
+    document.getElementById('bRecus').onclick = () => mudarEstadoAntiga('Recusado');
+  }
   escreverStock();
   f.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ---------- ISBN que não está na lista: registar como edição antiga ---------- */
+function mostrarNaoExiste(isbn) {
+  atual = null;
+  const f = document.getElementById('ficha');
+  f.innerHTML =
+    '<div class="estado no">✖ Este ISBN não está na lista</div>' +
+    '<div class="meta">ISBN ' + esc(isbn) + '</div>' +
+    '<p>É uma <strong>edição antiga</strong> de um livro da lista? Se sim, regista-a: fica marcada como ' +
+    '<em>por confirmar com o professor</em> e já podes dar entrada no stock.</p>' +
+    '<div class="linha-btns" id="pergAntiga"><button id="bSimAntiga" class="btn btn-acc">Sim, registar</button>' +
+    '<button id="bNaoAntiga" class="btn btn-sec">Não</button></div>' +
+    '<div id="formAntiga" class="form hidden"></div>';
+  f.classList.remove('hidden');
+  document.getElementById('bNaoAntiga').onclick = () => f.classList.add('hidden');
+  document.getElementById('bSimAntiga').onclick = () => formularioAntiga(isbn);
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+
+function formularioAntiga(isbn) {
+  document.getElementById('pergAntiga').classList.add('hidden');
+  const atuais = LIVROS.filter(l => !l.antiga);
+  const anos = [...new Set(atuais.flatMap(l => l.anos))].sort((a, b) => ordemAno(a) - ordemAno(b));
+  const disciplinas = [...new Set(atuais.map(l => l.disciplina).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const fa = document.getElementById('formAntiga');
+  fa.innerHTML =
+    '<label>Título *<input id="aTitulo" type="text" placeholder="ex.: MX 5 - Manual (ed. 2020)"></label>' +
+    '<label>Ano<select id="aAno"><option value="">—</option>' + anos.map(a => '<option>' + esc(a) + '</option>').join('') + '</select></label>' +
+    '<label>Disciplina<select id="aDisc"><option value="">—</option>' + disciplinas.map(d => '<option>' + esc(d) + '</option>').join('') + '</select></label>' +
+    '<label>Substitui qual livro da lista atual? (opcional)<select id="aEquiv"><option value="">—</option></select></label>' +
+    '<label>Partes<select id="aPartes"><option value="1">1 (livro único)</option><option value="2">2 partes</option><option value="3">3 partes</option></select></label>' +
+    '<div class="linha-btns"><button id="bGuardarAntiga" class="btn btn-acc">Guardar edição antiga</button></div>';
+  fa.classList.remove('hidden');
+
+  // A lista de "substitui" mostra os livros do ano/disciplina escolhidos e sugere título e partes
+  const encherEquiv = () => {
+    const ano = document.getElementById('aAno').value, disc = document.getElementById('aDisc').value;
+    const opc = atuais.filter(l => (!ano || l.anos.indexOf(ano) >= 0) && (!disc || l.disciplina === disc))
+      .sort((a, b) => a.titulo.localeCompare(b.titulo)).slice(0, 60);
+    document.getElementById('aEquiv').innerHTML = '<option value="">—</option>' +
+      opc.map(l => '<option value="' + l.isbn + '">' + esc(l.titulo) + '</option>').join('');
+  };
+  document.getElementById('aAno').onchange = encherEquiv;
+  document.getElementById('aDisc').onchange = encherEquiv;
+  document.getElementById('aEquiv').onchange = () => {
+    const l = atuais.find(x => x.isbn === document.getElementById('aEquiv').value);
+    if (!l) return;
+    if (!document.getElementById('aTitulo').value.trim()) document.getElementById('aTitulo').value = l.titulo + ' (edição antiga)';
+    document.getElementById('aPartes').value = String(Math.min(3, l.partes || 1));
+    if (!document.getElementById('aDisc').value) document.getElementById('aDisc').value = l.disciplina;
+  };
+  encherEquiv();
+  document.getElementById('aTitulo').focus();
+  document.getElementById('bGuardarAntiga').onclick = () => guardarAntiga(isbn);
+}
+
+async function guardarAntiga(isbn) {
+  const titulo = document.getElementById('aTitulo').value.trim();
+  if (!titulo) { toast('Escreve o título.'); return; }
+  const b = document.getElementById('bGuardarAntiga');
+  b.disabled = true; b.textContent = 'A guardar…';
+  try {
+    const r = await api('novaAntiga', {
+      isbn, titulo,
+      ano: document.getElementById('aAno').value,
+      disciplina: document.getElementById('aDisc').value,
+      equivale: document.getElementById('aEquiv').value,
+      partes: Number(document.getElementById('aPartes').value) || 1
+    });
+    LIVROS = LIVROS.filter(l => l.isbn !== r.livro.isbn).concat([r.livro]);
+    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+    contarAntigas();
+    toast('🕰 Edição antiga registada — por confirmar com o professor');
+    mostrar(r.livro, r.livro.isbn);
+  } catch (e) {
+    toast(e instanceof SemRede ? 'É preciso rede para registar uma edição antiga. Tenta quando houver ligação.' : 'Erro: ' + e.message);
+    b.disabled = false; b.textContent = 'Guardar edição antiga';
+  }
+}
+
+async function mudarEstadoAntiga(estado) {
+  const nota = prompt((estado === 'Aprovado' ? 'Aprovado' : 'Recusado') + ' pelo professor. Nota (opcional — ex.: nome do professor):', '');
+  if (nota === null) return;   // cancelou
+  try {
+    const r = await api('estadoAntiga', { isbn: atual.isbn, estado, nota });
+    LIVROS = LIVROS.map(l => l.isbn === r.livro.isbn ? r.livro : l);
+    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+    contarAntigas();
+    toast(estado === 'Aprovado' ? '✔ Marcada como aprovada' : '✖ Marcada como recusada');
+    mostrar(r.livro, r.livro.isbn);
+  } catch (e) {
+    toast(e instanceof SemRede ? 'É preciso rede para mudar o estado.' : 'Erro: ' + e.message);
+  }
+}
+
+/* ---------- Separador "Antigas" ---------- */
+function contarAntigas() {
+  const n = LIVROS.filter(l => l.antiga && l.estado === 'Por confirmar').length;
+  const b = document.getElementById('nAntigas');
+  b.textContent = n; b.classList.toggle('hidden', !n);
+}
+
+function desenharAntigas() {
+  const ul = document.getElementById('listaAntigas');
+  ul.innerHTML = '';
+  const antigas = LIVROS.filter(l => l.antiga);
+  if (!antigas.length) {
+    ul.innerHTML = '<li class="grupo">Ainda não há edições antigas registadas</li>';
+    return;
+  }
+  [['Por confirmar', 'Por confirmar com o professor'], ['Aprovado', 'Aprovadas'], ['Recusado', 'Recusadas']].forEach(([estado, titulo]) => {
+    const grupo = antigas.filter(l => l.estado === estado)
+      .sort((a, b) => ordemAno(a.anos[0] || '') - ordemAno(b.anos[0] || '') || a.titulo.localeCompare(b.titulo));
+    if (!grupo.length) return;
+    const g = document.createElement('li'); g.className = 'grupo'; g.textContent = titulo + ' (' + grupo.length + ')'; ul.appendChild(g);
+    grupo.forEach(l => {
+      const partes = nomesPartes(l.partes);
+      const valores = partes.map(p => STOCK[l.isbn + '|' + p] || 0);
+      const li = document.createElement('li');
+      li.innerHTML = '<div>' + esc(l.titulo) + '<small>' + esc([l.anos.join(', '), l.disciplina, l.isbn].filter(Boolean).join(' · ')) + '</small></div>' +
+        '<div class="n' + (valores.some(v => v <= 0) ? ' zero' : '') + '">' +
+        (partes.length > 1 ? partes.map((p, i) => 'P' + (i + 1) + ': ' + valores[i]).join('<br>') : valores[0]) + '</div>';
+      li.onclick = () => mostrar(l, l.isbn);
+      ul.appendChild(li);
+    });
+  });
 }
 
 /* ---------- Adicionar (com fila para quando não há rede) ----------
@@ -414,7 +583,7 @@ function mudarModo(m) {
 function textoBotao() {
   const b = document.getElementById('btnAdd');
   b.textContent = modo === 'saida' ? 'Retirar do stock'
-    : (atual && atual.fora ? 'Adicionar mesmo assim' : 'Adicionar ao stock');
+    : 'Adicionar ao stock';
   b.classList.toggle('btn-saida', modo === 'saida');
 }
 
@@ -471,14 +640,18 @@ async function adicionar() {
 /* ---------- Separadores e lista por ano ---------- */
 document.getElementById('tabLeitura').onclick = () => mudarVista('leitura');
 document.getElementById('tabLista').onclick = () => mudarVista('lista');
+document.getElementById('tabAntigas').onclick = () => mudarVista('antigas');
 let anoSel = '';
 
 function mudarVista(v) {
-  document.getElementById('tabLeitura').classList.toggle('sel', v === 'leitura');
-  document.getElementById('tabLista').classList.toggle('sel', v === 'lista');
-  document.getElementById('vistaLeitura').classList.toggle('hidden', v !== 'leitura');
-  document.getElementById('vistaLista').classList.toggle('hidden', v !== 'lista');
-  if (v === 'lista') { pararLeitor(); desenharLista(); window.scrollTo(0, 0); }
+  [['leitura', 'tabLeitura', 'vistaLeitura'], ['lista', 'tabLista', 'vistaLista'], ['antigas', 'tabAntigas', 'vistaAntigas']]
+    .forEach(([nome, tab, vista]) => {
+      document.getElementById(tab).classList.toggle('sel', v === nome);
+      document.getElementById(vista).classList.toggle('hidden', v !== nome);
+    });
+  if (v !== 'leitura') { pararLeitor(); window.scrollTo(0, 0); }
+  if (v === 'lista') desenharLista();
+  if (v === 'antigas') desenharAntigas();
 }
 
 function ordemAno(a) {
@@ -488,7 +661,8 @@ function ordemAno(a) {
 }
 
 function desenharLista() {
-  const anos = [...new Set(LIVROS.flatMap(l => l.anos))].sort((a, b) => ordemAno(a) - ordemAno(b));
+  const atuais = LIVROS.filter(l => !l.antiga);
+  const anos = [...new Set(atuais.flatMap(l => l.anos))].sort((a, b) => ordemAno(a) - ordemAno(b));
   if (!anoSel || anos.indexOf(anoSel) < 0) anoSel = anos[0] || '';
 
   const c = document.getElementById('anos');
@@ -501,7 +675,7 @@ function desenharLista() {
     c.appendChild(b);
   });
 
-  const livros = LIVROS.filter(l => l.anos.indexOf(anoSel) >= 0)
+  const livros = atuais.filter(l => l.anos.indexOf(anoSel) >= 0)
     .sort((a, b) => (a.tipo === 'Leitura extensiva') - (b.tipo === 'Leitura extensiva') ||
       a.disciplina.localeCompare(b.disciplina) || a.titulo.localeCompare(b.titulo));
   const ul = document.getElementById('listaAno');
@@ -530,6 +704,7 @@ function desenharLista() {
 
 function escreverStock() {
   if (!document.getElementById('vistaLista').classList.contains('hidden')) desenharLista();
+  if (!document.getElementById('vistaAntigas').classList.contains('hidden')) desenharAntigas();
   if (!atual || !document.getElementById('stockAtual')) return;
   const partes = nomesPartes(atual.partes);
   document.getElementById('stockAtual').textContent = 'Em stock: ' +
