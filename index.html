@@ -14,7 +14,7 @@
      ÚNICA LINHA A ALTERAR: o link da Aplicação Web do Apps Script
      (Implementar → Gerir implementações → copiar o URL que termina em /exec)
      ====================================================================== */
-  const API_URL = 'COLAR_AQUI_O_LINK_QUE_TERMINA_EM_/exec';
+  const API_URL = 'https://script.google.com/macros/s/AKfycbx5mTZ4Yoy8IA2NxZZk4T3MJUuzuoyn_wpjgnlNjYdoRDEf-WWiuvj3PuuTJ81_LHV4/exec';
 </script>
 <style>
   :root { --bg:#f6f4ef; --card:#fff; --ink:#1f2a2e; --muted:#6b7578; --acc:#1f6f5c; --ok:#e3f2ec; --no:#fbe9e7; --line:#e2ded6; }
@@ -92,7 +92,13 @@ async function api(acao, dados) {
   } else {
     resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw));
   }
-  const j = await resp.json();
+  const texto = await resp.text();
+  let j;
+  try { j = JSON.parse(texto); }
+  catch (e) {
+    throw new Error('O Apps Script não respondeu como esperado. Confirma em "Gerir implementações" ' +
+      'que o acesso é "Qualquer pessoa" e que está na versão mais recente.');
+  }
   if (!j.ok) throw new Error(j.erro || 'Erro desconhecido');
   return j;
 }
