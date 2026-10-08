@@ -110,7 +110,16 @@ function lerGuardado(k) { try { return localStorage.getItem(k) || ''; } catch (e
 document.getElementById('nome').value = lerGuardado('stock_nome');
 document.getElementById('btnEntrar').onclick = entrar;
 document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
-document.getElementById('btnSair').onclick = () => { guardar('stock_pw', ''); location.reload(); };
+document.getElementById('btnSair').onclick = () => { guardar('stock_pw', ''); guardar('stock_dados', ''); location.reload(); };
+
+function mostrarApp(d, nome, atualizado) {
+  LIVROS = d.livros; STOCK = d.stock;
+  document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome +
+    (atualizado ? '' : ' · a atualizar…');
+  document.getElementById('ecraEntrada').classList.add('hidden');
+  document.getElementById('ecraApp').classList.remove('hidden');
+  if (atual) escreverStock();
+}
 
 async function entrar(automatico) {
   const nome = document.getElementById('nome').value.trim() || lerGuardado('stock_nome');
@@ -118,18 +127,36 @@ async function entrar(automatico) {
   if (!nome) { toast('Escreve o teu nome.'); return; }
   if (!pw) return;
   SESSAO = { nome, pw };
+
+  // Entrada rápida: se já houver uma lista guardada neste telemóvel, mostra-a já
+  // e vai buscar a versão atual por trás.
+  let rapido = false;
+  if (automatico === true) {
+    try {
+      const g = JSON.parse(lerGuardado('stock_dados') || 'null');
+      if (g && g.livros && g.livros.length) { mostrarApp(g, nome, false); rapido = true; }
+    } catch (e) {}
+  }
+
   const b = document.getElementById('btnEntrar');
   b.disabled = true; b.textContent = 'A entrar…';
   try {
     const d = await api('dados');
     guardar('stock_nome', nome); guardar('stock_pw', pw);
-    LIVROS = d.livros; STOCK = d.stock;
-    document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome;
-    document.getElementById('ecraEntrada').classList.add('hidden');
-    document.getElementById('ecraApp').classList.remove('hidden');
+    guardar('stock_dados', JSON.stringify({ livros: d.livros, stock: d.stock }));
+    mostrarApp(d, nome, true);
   } catch (e) {
-    guardar('stock_pw', '');
-    if (automatico !== true) toast(API_URL.indexOf('/exec') < 0 ? 'Falta colar o link do Apps Script no index.html.' : e.message);
+    if (/palavra-passe/i.test(e.message)) {
+      // A palavra-passe mudou: volta ao ecrã de entrada
+      guardar('stock_pw', ''); guardar('stock_dados', '');
+      document.getElementById('ecraApp').classList.add('hidden');
+      document.getElementById('ecraEntrada').classList.remove('hidden');
+      if (automatico === true) toast('A palavra-passe mudou. Escreve a nova.');
+    }
+    if (rapido) document.getElementById('carregar').textContent =
+      LIVROS.length + ' livros (lista guardada; sem ligação) · ' + nome;
+    else if (automatico !== true || !/palavra-passe/i.test(e.message))
+      toast(API_URL.indexOf('/exec') < 0 ? 'Falta colar o link do Apps Script no index.html.' : e.message);
   } finally {
     b.disabled = false; b.textContent = 'Entrar';
   }
@@ -255,6 +282,7 @@ async function adicionar() {
   try {
     const r = await api('adicionar', { isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes, qtd });
     STOCK = r.stock; escreverStock();
+    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
     b.textContent = 'Adicionar ao stock';
     toast('✔ ' + qtd + ' × ' + partes.join(' + ') + ' adicionado');
   } catch (e) {
