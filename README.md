@@ -1,4 +1,4 @@
-# Stock de Manuais — Externato ASVP
+# Stock de Manuais
 
 Página para registar a entrada de manuais escolares no stock, a partir do telemóvel
 (leitura do código de barras ou pesquisa por ISBN/título).
@@ -8,7 +8,7 @@ Página para registar a entrada de manuais escolares no stock, a partir do telem
 | Peça | Onde está | Para quê |
 |---|---|---|
 | `index.html` | este repositório (GitHub Pages) | a página usada no telemóvel |
-| Google Sheet **Inventario Livros SVP** | Google Drive | lista de manuais, correções, movimentos e stock |
+| Google Sheet **Inventário de Livros** | Google Drive | lista de manuais, correções, movimentos e stock |
 | Apps Script (dentro da Sheet) | Extensões → Apps Script | extrai a lista do site do colégio e recebe os registos da página |
 
 A página não guarda dados: lê e grava tudo na Google Sheet através do Apps Script,
