@@ -27,7 +27,7 @@ nem carregar em "sair" enquanto houver registos por enviar.
 - **Correções** — ISBN errados no site do colégio e o ISBN certo (aplicadas ao gerar a lista).
 - **Lista** — gerada pelo menu *📚 Manuais → Gerar lista*. É a lista que a página usa.
 - **Avisos** — problemas encontrados ao gerar a lista (❌ erro, 🧹 correção sem efeito, 🔎 verificar).
-- **Movimentos** — cada entrada no stock (data, ISBN, parte, quantidade, quem registou).
+- **Movimentos** — cada entrada ou saída (data, ISBN, parte, quantidade, quem registou, ID, Entrada/Saída). As saídas têm quantidade negativa.
 - **Stock** — total por ISBN e parte (fórmula, não editar).
 - **Config** — palavra-passe da página.
 

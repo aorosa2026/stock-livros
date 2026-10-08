@@ -33,6 +33,7 @@
   #sugestoes { list-style:none; padding:0; margin:8px 0 0; }
   #sugestoes li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
   #sugestoes li small { color:var(--muted); display:block; margin-top:2px; }
+  #sugestoes li.mais { background:none; border:0; color:var(--muted); font-size:.85rem; cursor:default; }
   .card { background:var(--card); border-radius:14px; padding:16px; margin-top:14px; border:1px solid var(--line); }
   .estado { border-radius:10px; padding:10px 12px; font-weight:600; margin-bottom:10px; }
   .ok { background:var(--ok); color:#155443; } .no { background:var(--no); color:#8a2c1f; }
@@ -46,6 +47,20 @@
   .stock { font-size:.9rem; color:var(--muted); }
   #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; }
   .fila { background:#fff6db; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:.9rem; margin:12px 0 0; }
+  .tabs { display:flex; gap:6px; background:#ebe7df; border-radius:12px; padding:4px; margin-bottom:14px; }
+  .tab { flex:1; border:0; background:none; padding:10px; border-radius:9px; font-size:.95rem; font-weight:600; color:var(--muted); cursor:pointer; }
+  .tab.sel { background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .mov { display:flex; gap:6px; margin:4px 0 12px; }
+  .mov button { flex:1; border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px; font-size:.95rem; font-weight:600; color:var(--ink); cursor:pointer; }
+  .mov button.sel.entrada { background:var(--ok); border-color:#9fd2bf; color:#155443; }
+  .mov button.sel.saida { background:var(--no); border-color:#e6b3aa; color:#8a2c1f; }
+  .btn-saida { background:#b4432f; }
+  .lista { list-style:none; padding:0; margin:0; }
+  .lista li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; align-items:center; }
+  .lista li small { color:var(--muted); display:block; margin-top:2px; }
+  .lista .n { font-weight:700; white-space:nowrap; text-align:right; font-size:.9rem; }
+  .lista .n.zero { color:#b4432f; }
+  .lista .grupo { background:none; border:0; padding:12px 2px 4px; cursor:default; font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -64,17 +79,32 @@
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
     <header><h1>📚 Stock de Manuais</h1><button class="sair" id="btnSair">sair</button></header>
-
-    <button id="btnLer" class="btn btn-acc">📷 Ler código de barras</button>
-    <div id="leitor"></div>
-    <button id="btnFoto" class="link">Não lê? Tirar uma foto ao código</button>
-    <input id="foto" type="file" accept="image/*" capture="environment" hidden>
-
-    <input id="pesquisa" type="search" placeholder="ISBN (números), título ou disciplina…" autocomplete="off">
-    <ul id="sugestoes"></ul>
-
+    <nav class="tabs">
+      <button id="tabLeitura" class="tab sel">📷 Leitura</button>
+      <button id="tabLista" class="tab">📋 Lista por ano</button>
+    </nav>
     <p id="fila" class="fila hidden"></p>
-    <div id="ficha" class="card hidden"></div>
+
+    <!-- Vista: leitura -->
+    <div id="vistaLeitura">
+      <button id="btnLer" class="btn btn-acc">📷 Ler código de barras</button>
+      <div id="leitor"></div>
+      <button id="btnFoto" class="link">Não lê? Tirar uma foto ao código</button>
+      <input id="foto" type="file" accept="image/*" capture="environment" hidden>
+
+      <input id="pesquisa" type="search" placeholder="ISBN, título, disciplina ou ano — ex.: mat 5 ano" autocomplete="off">
+      <ul id="sugestoes"></ul>
+
+      <div id="ficha" class="card hidden"></div>
+    </div>
+
+    <!-- Vista: lista por ano -->
+    <div id="vistaLista" class="hidden">
+      <div class="chips" id="anos"></div>
+      <p class="meta" id="resumoAno"></p>
+      <ul id="listaAno" class="lista"></ul>
+    </div>
+
     <p id="carregar" class="meta">A carregar lista…</p>
   </section>
 </main>
@@ -136,7 +166,7 @@ function mostrarApp(d, nome, atualizado) {
     (atualizado ? '' : ' · a atualizar…');
   document.getElementById('ecraEntrada').classList.add('hidden');
   document.getElementById('ecraApp').classList.remove('hidden');
-  if (atual) escreverStock();
+  escreverStock();
 }
 
 async function entrar(automatico) {
@@ -234,30 +264,56 @@ foto.addEventListener('change', async () => {
 
 /* ---------- Pesquisa ---------- */
 const campo = document.getElementById('pesquisa');
+/** Texto para comparar: sem acentos, sem maiúsculas, e qualquer forma de escrever o ano
+ *  ("1.º ano", "1º ano", "1o ano", "1 ano", "1ano") fica igual: "1ano". */
+function normal(t) {
+  return String(t).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[-–—_/]/g, ' ')
+    .replace(/(\d+)\s*\.?\s*[o°]?\s*ano\b/g, '$1ano')
+    .replace(/\s+/g, ' ').trim();
+}
+const textoPesquisa = l => l._p || (l._p = normal([l.titulo, l.disciplina, l.tipo, l.anos.join(' ')].join(' ')));
+
 campo.addEventListener('input', () => {
-  const q = campo.value.trim().toLowerCase(), ul = document.getElementById('sugestoes');
+  const bruto = campo.value.trim(), ul = document.getElementById('sugestoes');
   ul.innerHTML = '';
-  if (q.length < 2) return;
-  const soNum = /^\d+$/.test(q);
-  const palavras = q.split(/\s+/);
-  LIVROS.filter(l => soNum ? l.isbn.includes(q)
-      : palavras.every(p => (l.titulo + ' ' + l.disciplina + ' ' + l.anos.join(' ')).toLowerCase().includes(p)))
-    .slice(0, 12).forEach(l => {
+  if (bruto.length < 2) return;
+  const soNum = /^[\d\s-]+$/.test(bruto) && bruto.replace(/\D/g, '').length >= 2;
+  const q = soNum ? bruto.replace(/\D/g, '') : normal(bruto);
+  const palavras = q.split(' ');
+  const encontrados = LIVROS.filter(l => soNum ? l.isbn.includes(q)
+      : palavras.every(p => textoPesquisa(l).includes(p)));
+  encontrados.slice(0, 25).forEach(l => {
       const li = document.createElement('li');
       li.innerHTML = esc(l.titulo) + '<small>' + realce(l.isbn, soNum ? q : '') + ' · ' +
         esc([l.disciplina, l.anos.join(', ')].filter(Boolean).join(' · ')) + '</small>';
       li.onclick = () => { ul.innerHTML = ''; campo.value = ''; mostrar(l, l.isbn); };
       ul.appendChild(li);
     });
+  if (encontrados.length > 25) {
+    const li = document.createElement('li');
+    li.className = 'mais';
+    li.textContent = '+ ' + (encontrados.length - 25) + ' livros — escreve mais palavras, ou usa a Lista por ano';
+    ul.appendChild(li);
+  }
+  if (!encontrados.length) {
+    const li = document.createElement('li');
+    li.className = 'mais';
+    li.textContent = 'Nenhum livro encontrado';
+    ul.appendChild(li);
+  }
   if (soNum && q.length === 13 && !LIVROS.some(l => l.isbn === q)) procurar(q);
 });
 
 function procurar(isbn) { mostrar(LIVROS.find(l => l.isbn === isbn) || null, isbn); }
 
 /* ---------- Ficha do livro ---------- */
+let modo = 'entrada';   // 'entrada' ou 'saida'
+
 function mostrar(livro, isbn) {
-  atual = livro ? livro : { isbn, titulo: '(fora da lista)', disciplina: '', tipo: '', anos: [], partes: 1 };
-  sel = new Set(); qtd = 1;
+  mudarVista('leitura');
+  atual = livro ? livro : { isbn, titulo: '(fora da lista)', disciplina: '', tipo: '', anos: [], partes: 1, fora: true };
+  sel = new Set(); qtd = 1; modo = 'entrada';
   const f = document.getElementById('ficha');
   const partes = nomesPartes(atual.partes);
   if (partes.length === 1) sel.add(partes[0]);
@@ -267,11 +323,15 @@ function mostrar(livro, isbn) {
     '<strong>' + esc(atual.titulo) + '</strong>' +
     '<div class="meta">ISBN ' + esc(isbn) +
       esc([atual.disciplina, atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) + '</div>' +
-    (partes.length > 1 ? '<div>Que parte vai para o stock?</div><div class="chips" id="chips"></div>' : '') +
+    '<div class="mov"><button id="mEntrada" class="entrada sel">＋ Entrada</button><button id="mSaida" class="saida">－ Saída</button></div>' +
+    (partes.length > 1 ? '<div>Que parte?</div><div class="chips" id="chips"></div>' : '') +
     '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="stock">unidade(s)</span></div>' +
-    '<button id="btnAdd" class="btn btn-acc">' + (livro ? 'Adicionar ao stock' : 'Adicionar mesmo assim') + '</button>' +
+    '<button id="btnAdd" class="btn btn-acc"></button>' +
     '<p class="stock" id="stockAtual"></p>';
   f.classList.remove('hidden');
+  document.getElementById('mEntrada').onclick = () => mudarModo('entrada');
+  document.getElementById('mSaida').onclick = () => mudarModo('saida');
+  mudarModo('entrada');
 
   if (partes.length > 1) {
     const c = document.getElementById('chips');
@@ -337,46 +397,133 @@ async function enviarFila() {
   }
   if (enviados && !fila.length) {
     toast('✔ ' + enviados + ' registo(s) guardado(s) na folha');
-    try { const d = await api('dados'); STOCK = d.stock; guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK })); if (atual) escreverStock(); } catch (e) {}
+    try { const d = await api('dados'); STOCK = d.stock; guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK })); escreverStock(); } catch (e) {}
   }
 }
 window.addEventListener('online', enviarFila);
 setInterval(enviarFila, 60000);
 
+function mudarModo(m) {
+  modo = m;
+  document.getElementById('mEntrada').classList.toggle('sel', m === 'entrada');
+  document.getElementById('mSaida').classList.toggle('sel', m === 'saida');
+  textoBotao();
+}
+function textoBotao() {
+  const b = document.getElementById('btnAdd');
+  b.textContent = modo === 'saida' ? 'Retirar do stock'
+    : (atual && atual.fora ? 'Adicionar mesmo assim' : 'Adicionar ao stock');
+  b.classList.toggle('btn-saida', modo === 'saida');
+}
+
+/** Regista uma entrada (qtd positiva) ou saída (qtd negativa). */
 async function adicionar() {
   if (!sel.size) { toast('Escolhe pelo menos uma parte.'); return; }
+  const partes = [...sel];
+  const sinal = modo === 'saida' ? -1 : 1;
+
+  if (sinal < 0) {
+    const faltam = partes.filter(p => (STOCK[atual.isbn + '|' + p] || 0) < qtd);
+    if (faltam.length && !confirm('O stock ' + (partes.length > 1 ? 'de ' + faltam.join(' e ') + ' ' : '') +
+        'é inferior a ' + qtd + '. Retirar mesmo assim? (o stock fica negativo)')) return;
+  }
+
   const b = document.getElementById('btnAdd');
   b.disabled = true; b.textContent = 'A guardar…';
-  const m = { id: novoId(), isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes: [...sel], qtd };
-  const resumo = m.qtd + ' × ' + m.partes.join(' + ');
+  const m = { id: novoId(), isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes, qtd: sinal * qtd };
+  const resumo = qtd + ' × ' + partes.join(' + ');
+  const feito = sinal < 0 ? 'retirado' : 'adicionado';
 
-  // Se já há registos à espera, este vai para o fim da fila (mantém a ordem)
-  if (lerFila().length) {
-    gravarFila(lerFila().concat([m])); somarLocal(m); escreverStock();
-    toast('⏳ ' + resumo + ' guardado no telemóvel');
-    b.disabled = false; b.textContent = 'Adicionar ao stock';
-    enviarFila();
-    return;
-  }
   try {
-    const r = await api('adicionar', m);
-    STOCK = r.stock;
-    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
-    toast('✔ ' + resumo + ' adicionado');
-  } catch (e) {
-    if (e instanceof SemRede) {
+    // Se já há registos à espera, este vai para o fim da fila (mantém a ordem)
+    if (lerFila().length) {
       gravarFila(lerFila().concat([m])); somarLocal(m);
-      toast('📵 Sem rede: ' + resumo + ' guardado no telemóvel. Envia sozinho quando houver rede.');
-    } else {
-      toast('Erro: ' + e.message);
+      toast('⏳ ' + resumo + ' ' + feito + ' (guardado no telemóvel)');
+      enviarFila();
+      return;
+    }
+    try {
+      const r = await api('adicionar', m);
+      STOCK = r.stock;
+      guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+      toast((sinal < 0 ? '－ ' : '✔ ') + resumo + ' ' + feito);
+    } catch (e) {
+      if (e instanceof SemRede) {
+        gravarFila(lerFila().concat([m])); somarLocal(m);
+        toast('📵 Sem rede: ' + resumo + ' ' + feito + ' no telemóvel. Envia sozinho quando houver rede.');
+      } else {
+        toast('Erro: ' + e.message);
+      }
     }
   } finally {
     escreverStock();
-    b.disabled = false; b.textContent = 'Adicionar ao stock';
+    b.disabled = false; textoBotao();
   }
 }
 
+/* ---------- Separadores e lista por ano ---------- */
+document.getElementById('tabLeitura').onclick = () => mudarVista('leitura');
+document.getElementById('tabLista').onclick = () => mudarVista('lista');
+let anoSel = '';
+
+function mudarVista(v) {
+  document.getElementById('tabLeitura').classList.toggle('sel', v === 'leitura');
+  document.getElementById('tabLista').classList.toggle('sel', v === 'lista');
+  document.getElementById('vistaLeitura').classList.toggle('hidden', v !== 'leitura');
+  document.getElementById('vistaLista').classList.toggle('hidden', v !== 'lista');
+  if (v === 'lista') { pararLeitor(); desenharLista(); window.scrollTo(0, 0); }
+}
+
+function ordemAno(a) {
+  if (/pr[ée]/i.test(a)) return 0;
+  const n = parseInt(String(a).replace(/\D/g, ''), 10);
+  return isNaN(n) ? 99 : n;
+}
+
+function desenharLista() {
+  const anos = [...new Set(LIVROS.flatMap(l => l.anos))].sort((a, b) => ordemAno(a) - ordemAno(b));
+  if (!anoSel || anos.indexOf(anoSel) < 0) anoSel = anos[0] || '';
+
+  const c = document.getElementById('anos');
+  c.innerHTML = '';
+  anos.forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (a === anoSel ? ' sel' : '');
+    b.textContent = a.replace(' ano', '');
+    b.onclick = () => { anoSel = a; desenharLista(); };
+    c.appendChild(b);
+  });
+
+  const livros = LIVROS.filter(l => l.anos.indexOf(anoSel) >= 0)
+    .sort((a, b) => (a.tipo === 'Leitura extensiva') - (b.tipo === 'Leitura extensiva') ||
+      a.disciplina.localeCompare(b.disciplina) || a.titulo.localeCompare(b.titulo));
+  const ul = document.getElementById('listaAno');
+  ul.innerHTML = '';
+  let semStock = 0, grupoAtual = null;
+  livros.forEach(l => {
+    const grupo = l.tipo === 'Leitura extensiva' ? 'Leitura extensiva' : 'Manuais e cadernos';
+    if (grupo !== grupoAtual) {
+      grupoAtual = grupo;
+      const g = document.createElement('li'); g.className = 'grupo'; g.textContent = grupo; ul.appendChild(g);
+    }
+    const partes = nomesPartes(l.partes);
+    const valores = partes.map(p => STOCK[l.isbn + '|' + p] || 0);
+    const zero = valores.some(v => v <= 0);
+    if (zero) semStock++;
+    const li = document.createElement('li');
+    li.innerHTML = '<div>' + esc(l.titulo) + '<small>' + esc([l.disciplina, l.isbn].filter(Boolean).join(' · ')) + '</small></div>' +
+      '<div class="n' + (zero ? ' zero' : '') + '">' +
+      (partes.length > 1 ? partes.map((p, i) => 'P' + (i + 1) + ': ' + valores[i]).join('<br>') : valores[0]) + '</div>';
+    li.onclick = () => mostrar(l, l.isbn);
+    ul.appendChild(li);
+  });
+  document.getElementById('resumoAno').textContent = livros.length + ' livros' +
+    (semStock ? ' · ' + semStock + ' sem stock (a vermelho)' : '') + ' · toca num livro para dar entrada ou saída';
+}
+
 function escreverStock() {
+  if (!document.getElementById('vistaLista').classList.contains('hidden')) desenharLista();
+  if (!atual || !document.getElementById('stockAtual')) return;
   const partes = nomesPartes(atual.partes);
   document.getElementById('stockAtual').textContent = 'Em stock: ' +
     partes.map(p => (partes.length > 1 ? p + ': ' : '') + (STOCK[atual.isbn + '|' + p] || 0)).join(' · ');
