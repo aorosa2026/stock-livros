@@ -74,7 +74,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 3</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 4</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -107,7 +107,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 3 · entradas/saídas · lista por ano · pesquisa sem acentos</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 4 · stock nunca abaixo de 0</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -424,10 +424,15 @@ async function adicionar() {
   const partes = [...sel];
   const sinal = modo === 'saida' ? -1 : 1;
 
+  // O stock nunca pode ficar abaixo de 0
   if (sinal < 0) {
     const faltam = partes.filter(p => (STOCK[atual.isbn + '|' + p] || 0) < qtd);
-    if (faltam.length && !confirm('O stock ' + (partes.length > 1 ? 'de ' + faltam.join(' e ') + ' ' : '') +
-        'é inferior a ' + qtd + '. Retirar mesmo assim? (o stock fica negativo)')) return;
+    if (faltam.length) {
+      toast(faltam.map(p => (partes.length > 1 || p !== 'Único' ? p + ': ' : '') +
+        'só há ' + Math.max(0, STOCK[atual.isbn + '|' + p] || 0) + ' em stock').join(' · ') +
+        '. Não é possível retirar ' + qtd + '.');
+      return;
+    }
   }
 
   const b = document.getElementById('btnAdd');
