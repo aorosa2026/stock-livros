@@ -45,6 +45,7 @@
   .qtd span { min-width:30px; text-align:center; font-size:1.2rem; font-weight:600; }
   .stock { font-size:.9rem; color:var(--muted); }
   #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; }
+  .fila { background:#fff6db; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:.9rem; margin:12px 0 0; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -72,6 +73,7 @@
     <input id="pesquisa" type="search" placeholder="ISBN (números), título ou disciplina…" autocomplete="off">
     <ul id="sugestoes"></ul>
 
+    <p id="fila" class="fila hidden"></p>
     <div id="ficha" class="card hidden"></div>
     <p id="carregar" class="meta">A carregar lista…</p>
   </section>
@@ -83,16 +85,28 @@ let LIVROS = [], STOCK = {}, scanner = null, atual = null, sel = new Set(), qtd 
 let SESSAO = { nome: '', pw: '' };
 
 /* ---------- Ligação ao Apps Script ---------- */
+/** Erro de rede (sem ligação ou demasiado lento) — distinto de um erro devolvido pelo servidor. */
+class SemRede extends Error {}
+
 async function api(acao, dados) {
-  let resp;
-  if (dados) {
-    // text/plain evita o pedido prévio (CORS) que o Apps Script não aceita
-    resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(Object.assign({ acao, pw: SESSAO.pw, quem: SESSAO.nome }, dados)) });
-  } else {
-    resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw));
+  const ctrl = new AbortController();
+  const limite = setTimeout(() => ctrl.abort(), 20000);
+  let resp, texto;
+  try {
+    if (dados) {
+      // text/plain evita o pedido prévio (CORS) que o Apps Script não aceita
+      resp = await fetch(API_URL, { method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ acao, pw: SESSAO.pw, quem: SESSAO.nome }, dados)) });
+    } else {
+      resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw), { signal: ctrl.signal });
+    }
+    texto = await resp.text();
+  } catch (e) {
+    throw new SemRede('Sem ligação à internet');
+  } finally {
+    clearTimeout(limite);
   }
-  const texto = await resp.text();
   let j;
   try { j = JSON.parse(texto); }
   catch (e) {
@@ -113,7 +127,11 @@ document.getElementById('pw').addEventListener('keydown', e => { if (e.key === '
 document.getElementById('btnSair').onclick = () => { guardar('stock_pw', ''); guardar('stock_dados', ''); location.reload(); };
 
 function mostrarApp(d, nome, atualizado) {
-  LIVROS = d.livros; STOCK = d.stock;
+  LIVROS = d.livros; STOCK = Object.assign({}, d.stock);
+  // O stock do servidor ainda não inclui os registos à espera de rede: soma-os
+  if (atualizado) lerFila().forEach(m => m.partes.forEach(p => {
+    const k = m.isbn + '|' + p; STOCK[k] = (STOCK[k] || 0) + m.qtd; }));
+  mostrarFila();
   document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome +
     (atualizado ? '' : ' · a atualizar…');
   document.getElementById('ecraEntrada').classList.add('hidden');
@@ -145,6 +163,7 @@ async function entrar(automatico) {
     guardar('stock_nome', nome); guardar('stock_pw', pw);
     guardar('stock_dados', JSON.stringify({ livros: d.livros, stock: d.stock }));
     mostrarApp(d, nome, true);
+    enviarFila();
   } catch (e) {
     if (/palavra-passe/i.test(e.message)) {
       // A palavra-passe mudou: volta ao ecrã de entrada
@@ -155,6 +174,7 @@ async function entrar(automatico) {
     }
     if (rapido) document.getElementById('carregar').textContent =
       LIVROS.length + ' livros (lista guardada; sem ligação) · ' + nome;
+    else if (e instanceof SemRede && automatico !== true) toast('Sem ligação à internet. Tenta quando houver rede.');
     else if (automatico !== true || !/palavra-passe/i.test(e.message))
       toast(API_URL.indexOf('/exec') < 0 ? 'Falta colar o link do Apps Script no index.html.' : e.message);
   } finally {
@@ -274,21 +294,85 @@ function mostrar(livro, isbn) {
   f.scrollIntoView({ behavior: 'smooth' });
 }
 
+/* ---------- Adicionar (com fila para quando não há rede) ----------
+   Cada registo leva um id único: se um envio for repetido (ex.: a rede caiu depois de o
+   servidor gravar), o Apps Script reconhece o id e não duplica a linha. */
+function lerFila() { try { return JSON.parse(lerGuardado('stock_fila') || '[]'); } catch (e) { return []; } }
+function gravarFila(f) { guardar('stock_fila', JSON.stringify(f)); mostrarFila(); }
+function novoId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function mostrarFila() {
+  const n = lerFila().length, el = document.getElementById('fila');
+  el.textContent = n ? '⏳ ' + n + ' registo(s) por enviar — são enviados quando houver rede' : '';
+  el.classList.toggle('hidden', !n);
+}
+
+/** Soma ao stock mostrado no telemóvel (antes de o servidor confirmar). */
+function somarLocal(m) {
+  m.partes.forEach(p => { const k = m.isbn + '|' + p; STOCK[k] = (STOCK[k] || 0) + m.qtd; });
+  guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+}
+
+let aEnviar = false, repetir = false;
+async function enviarFila() {
+  if (!SESSAO.pw) return;
+  if (aEnviar) { repetir = true; return; }       // já há um envio a decorrer: repete quando acabar
+  let fila = lerFila();
+  if (!fila.length) return;
+  aEnviar = true; repetir = false;
+  let enviados = 0;
+  try {
+    while (fila.length) {
+      try {
+        await api('adicionar', fila[0]);
+      } catch (e) {
+        if (e instanceof SemRede || /palavra-passe/i.test(e.message)) break;   // tenta mais tarde
+        toast('Registo de ' + fila[0].isbn + ' recusado: ' + e.message);       // erro do servidor: descarta
+      }
+      fila.shift(); gravarFila(fila); enviados++;
+    }
+  } finally {
+    aEnviar = false;
+    if (repetir) { repetir = false; setTimeout(enviarFila, 0); }
+  }
+  if (enviados && !fila.length) {
+    toast('✔ ' + enviados + ' registo(s) guardado(s) na folha');
+    try { const d = await api('dados'); STOCK = d.stock; guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK })); if (atual) escreverStock(); } catch (e) {}
+  }
+}
+window.addEventListener('online', enviarFila);
+setInterval(enviarFila, 60000);
+
 async function adicionar() {
   if (!sel.size) { toast('Escolhe pelo menos uma parte.'); return; }
   const b = document.getElementById('btnAdd');
   b.disabled = true; b.textContent = 'A guardar…';
-  const partes = [...sel];
+  const m = { id: novoId(), isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes: [...sel], qtd };
+  const resumo = m.qtd + ' × ' + m.partes.join(' + ');
+
+  // Se já há registos à espera, este vai para o fim da fila (mantém a ordem)
+  if (lerFila().length) {
+    gravarFila(lerFila().concat([m])); somarLocal(m); escreverStock();
+    toast('⏳ ' + resumo + ' guardado no telemóvel');
+    b.disabled = false; b.textContent = 'Adicionar ao stock';
+    enviarFila();
+    return;
+  }
   try {
-    const r = await api('adicionar', { isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes, qtd });
-    STOCK = r.stock; escreverStock();
+    const r = await api('adicionar', m);
+    STOCK = r.stock;
     guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
-    b.textContent = 'Adicionar ao stock';
-    toast('✔ ' + qtd + ' × ' + partes.join(' + ') + ' adicionado');
+    toast('✔ ' + resumo + ' adicionado');
   } catch (e) {
-    b.textContent = 'Tentar de novo'; toast('Erro: ' + e.message);
+    if (e instanceof SemRede) {
+      gravarFila(lerFila().concat([m])); somarLocal(m);
+      toast('📵 Sem rede: ' + resumo + ' guardado no telemóvel. Envia sozinho quando houver rede.');
+    } else {
+      toast('Erro: ' + e.message);
+    }
   } finally {
-    b.disabled = false;
+    escreverStock();
+    b.disabled = false; b.textContent = 'Adicionar ao stock';
   }
 }
 
@@ -301,6 +385,9 @@ function escreverStock() {
 function nomesPartes(n) { return n > 1 ? Array.from({ length: n }, (_, i) => 'Parte ' + (i + 1)) : ['Único']; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function realce(isbn, q) { if (!q) return esc(isbn); const i = isbn.indexOf(q); return esc(isbn.slice(0, i)) + '<b>' + q + '</b>' + esc(isbn.slice(i + q.length)); }
+/* Cópia da página no telemóvel para abrir sem rede (ver sw.js) */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
 </script>
 </body>

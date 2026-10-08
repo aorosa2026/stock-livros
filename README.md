@@ -8,11 +8,17 @@ Página para registar a entrada de manuais escolares no stock, a partir do telem
 | Peça | Onde está | Para quê |
 |---|---|---|
 | `index.html` | este repositório (GitHub Pages) | a página usada no telemóvel |
+| `sw.js` | este repositório | guarda uma cópia da página no telemóvel para abrir sem rede |
 | Google Sheet **Inventário de Livros** | Google Drive | lista de manuais, correções, movimentos e stock |
 | Apps Script (dentro da Sheet) | Extensões → Apps Script | extrai a lista do site do colégio e recebe os registos da página |
 
-A página não guarda dados: lê e grava tudo na Google Sheet através do Apps Script,
-e só funciona com a palavra-passe definida na folha **Config** (célula B1).
+A página lê e grava tudo na Google Sheet através do Apps Script, e só funciona com a
+palavra-passe definida na folha **Config** (célula B1).
+
+**Sem rede:** os registos ficam guardados no telemóvel (aviso amarelo ⏳) e são enviados
+sozinhos quando houver ligação. Cada registo tem um código único (coluna **ID** em
+Movimentos), por isso um envio repetido nunca duplica linhas. Não apagar dados do browser
+nem carregar em "sair" enquanto houver registos por enviar.
 
 ## Folhas da Google Sheet
 
