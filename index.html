@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f6f5c">
+<title>Stock de Manuais</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  /* ======================================================================
+     ÚNICA LINHA A ALTERAR: o link da Aplicação Web do Apps Script
+     (Implementar → Gerir implementações → copiar o URL que termina em /exec)
+     ====================================================================== */
+  const API_URL = 'COLAR_AQUI_O_LINK_QUE_TERMINA_EM_/exec';
+</script>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --ink:#1f2a2e; --muted:#6b7578; --acc:#1f6f5c; --ok:#e3f2ec; --no:#fbe9e7; --line:#e2ded6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  header { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:1.25rem; margin:4px 0 14px; }
+  .sair { background:none; border:0; color:var(--muted); font-size:.85rem; text-decoration:underline; cursor:pointer; }
+  .btn { border:0; border-radius:12px; padding:14px 16px; font-size:1rem; font-weight:600; cursor:pointer; }
+  .btn-acc { background:var(--acc); color:#fff; width:100%; }
+  .btn:disabled { opacity:.6; }
+  .link { background:none; border:0; color:var(--acc); text-decoration:underline; font-size:.9rem; padding:8px 0; cursor:pointer; }
+  #leitor { width:100%; margin-top:10px; border-radius:12px; overflow:hidden; }
+  input[type=search], input[type=text], input[type=password] { width:100%; padding:14px; font-size:1rem; border:1px solid var(--line); border-radius:12px; margin-top:12px; background:#fff; color:var(--ink); }
+  #sugestoes { list-style:none; padding:0; margin:8px 0 0; }
+  #sugestoes li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
+  #sugestoes li small { color:var(--muted); display:block; margin-top:2px; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-top:14px; border:1px solid var(--line); }
+  .estado { border-radius:10px; padding:10px 12px; font-weight:600; margin-bottom:10px; }
+  .ok { background:var(--ok); color:#155443; } .no { background:var(--no); color:#8a2c1f; }
+  .meta { color:var(--muted); font-size:.9rem; margin:4px 0 12px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:9px 14px; font-size:.95rem; cursor:pointer; color:var(--ink); }
+  .chip.sel { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .qtd { display:flex; align-items:center; gap:10px; margin:12px 0; }
+  .qtd button { width:42px; height:42px; border-radius:10px; border:1px solid var(--line); background:#fff; font-size:1.3rem; color:var(--ink); }
+  .qtd span { min-width:30px; text-align:center; font-size:1.2rem; font-weight:600; }
+  .stock { font-size:.9rem; color:var(--muted); }
+  #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <!-- ===== Entrada ===== -->
+  <section id="ecraEntrada">
+    <h1>📚 Stock de Manuais</h1>
+    <div class="card">
+      <label>O teu nome<input id="nome" type="text" autocomplete="name" placeholder="ex.: Alexandra"></label>
+      <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
+      <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
+    </div>
+  </section>
+
+  <!-- ===== App ===== -->
+  <section id="ecraApp" class="hidden">
+    <header><h1>📚 Stock de Manuais</h1><button class="sair" id="btnSair">sair</button></header>
+
+    <button id="btnLer" class="btn btn-acc">📷 Ler código de barras</button>
+    <div id="leitor"></div>
+    <button id="btnFoto" class="link">Não lê? Tirar uma foto ao código</button>
+    <input id="foto" type="file" accept="image/*" capture="environment" hidden>
+
+    <input id="pesquisa" type="search" placeholder="ISBN (números), título ou disciplina…" autocomplete="off">
+    <ul id="sugestoes"></ul>
+
+    <div id="ficha" class="card hidden"></div>
+    <p id="carregar" class="meta">A carregar lista…</p>
+  </section>
+</main>
+<div id="msg"></div>
+
+<script>
+let LIVROS = [], STOCK = {}, scanner = null, atual = null, sel = new Set(), qtd = 1;
+let SESSAO = { nome: '', pw: '' };
+
+/* ---------- Ligação ao Apps Script ---------- */
+async function api(acao, dados) {
+  let resp;
+  if (dados) {
+    // text/plain evita o pedido prévio (CORS) que o Apps Script não aceita
+    resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ acao, pw: SESSAO.pw, quem: SESSAO.nome }, dados)) });
+  } else {
+    resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw));
+  }
+  const j = await resp.json();
+  if (!j.ok) throw new Error(j.erro || 'Erro desconhecido');
+  return j;
+}
+
+/* ---------- Entrada ---------- */
+function guardar(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lerGuardado(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+
+document.getElementById('nome').value = lerGuardado('stock_nome');
+document.getElementById('btnEntrar').onclick = entrar;
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+document.getElementById('btnSair').onclick = () => { guardar('stock_pw', ''); location.reload(); };
+
+async function entrar(automatico) {
+  const nome = document.getElementById('nome').value.trim() || lerGuardado('stock_nome');
+  const pw = automatico === true ? lerGuardado('stock_pw') : document.getElementById('pw').value;
+  if (!nome) { toast('Escreve o teu nome.'); return; }
+  if (!pw) return;
+  SESSAO = { nome, pw };
+  const b = document.getElementById('btnEntrar');
+  b.disabled = true; b.textContent = 'A entrar…';
+  try {
+    const d = await api('dados');
+    guardar('stock_nome', nome); guardar('stock_pw', pw);
+    LIVROS = d.livros; STOCK = d.stock;
+    document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome;
+    document.getElementById('ecraEntrada').classList.add('hidden');
+    document.getElementById('ecraApp').classList.remove('hidden');
+  } catch (e) {
+    guardar('stock_pw', '');
+    if (automatico !== true) toast(API_URL.indexOf('/exec') < 0 ? 'Falta colar o link do Apps Script no index.html.' : e.message);
+  } finally {
+    b.disabled = false; b.textContent = 'Entrar';
+  }
+}
+if (lerGuardado('stock_pw')) entrar(true);
+
+/* ---------- Leitura em direto ---------- */
+document.getElementById('btnLer').onclick = async () => {
+  if (scanner) { await pararLeitor(); return; }
+  scanner = new Html5Qrcode('leitor', { verbose: false,
+    formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  document.getElementById('btnLer').textContent = '✖ Parar leitura';
+  try {
+    await scanner.start({ facingMode: 'environment' },
+      { fps: 12, qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.4, 150) }) },
+      async txt => {
+        if (navigator.vibrate) navigator.vibrate(80);
+        await pararLeitor();
+        procurar(txt.replace(/\D/g, ''));
+      });
+  } catch (e) {
+    await pararLeitor();
+    toast('Não foi possível abrir a câmara. Verifica a autorização da câmara para este site, ou tira uma foto.');
+  }
+};
+async function pararLeitor() {
+  if (scanner) { try { await scanner.stop(); } catch (e) {} try { scanner.clear(); } catch (e) {} scanner = null; }
+  document.getElementById('btnLer').textContent = '📷 Ler código de barras';
+}
+
+/* ---------- Leitura por foto (reserva) ---------- */
+const foto = document.getElementById('foto');
+document.getElementById('btnFoto').onclick = async () => { await pararLeitor(); foto.value = ''; foto.click(); };
+foto.addEventListener('change', async () => {
+  const f = foto.files && foto.files[0];
+  if (!f) return;
+  toast('A ler o código…');
+  let isbn = '';
+  if ('BarcodeDetector' in window) {
+    try {
+      const r = await new BarcodeDetector({ formats: ['ean_13', 'ean_8'] }).detect(await createImageBitmap(f));
+      isbn = (r[0] && r[0].rawValue || '').replace(/\D/g, '');
+    } catch (e) {}
+  }
+  if (!isbn) {
+    try {
+      const l = new Html5Qrcode('leitor', { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8] });
+      isbn = String(await l.scanFile(f, false)).replace(/\D/g, '');
+      l.clear();
+    } catch (e) {}
+  }
+  if (isbn) procurar(isbn); else toast('Não consegui ler o código. Tenta outra foto, ou pesquisa por números.');
+});
+
+/* ---------- Pesquisa ---------- */
+const campo = document.getElementById('pesquisa');
+campo.addEventListener('input', () => {
+  const q = campo.value.trim().toLowerCase(), ul = document.getElementById('sugestoes');
+  ul.innerHTML = '';
+  if (q.length < 2) return;
+  const soNum = /^\d+$/.test(q);
+  const palavras = q.split(/\s+/);
+  LIVROS.filter(l => soNum ? l.isbn.includes(q)
+      : palavras.every(p => (l.titulo + ' ' + l.disciplina + ' ' + l.anos.join(' ')).toLowerCase().includes(p)))
+    .slice(0, 12).forEach(l => {
+      const li = document.createElement('li');
+      li.innerHTML = esc(l.titulo) + '<small>' + realce(l.isbn, soNum ? q : '') + ' · ' +
+        esc([l.disciplina, l.anos.join(', ')].filter(Boolean).join(' · ')) + '</small>';
+      li.onclick = () => { ul.innerHTML = ''; campo.value = ''; mostrar(l, l.isbn); };
+      ul.appendChild(li);
+    });
+  if (soNum && q.length === 13 && !LIVROS.some(l => l.isbn === q)) procurar(q);
+});
+
+function procurar(isbn) { mostrar(LIVROS.find(l => l.isbn === isbn) || null, isbn); }
+
+/* ---------- Ficha do livro ---------- */
+function mostrar(livro, isbn) {
+  atual = livro ? livro : { isbn, titulo: '(fora da lista)', disciplina: '', tipo: '', anos: [], partes: 1 };
+  sel = new Set(); qtd = 1;
+  const f = document.getElementById('ficha');
+  const partes = nomesPartes(atual.partes);
+  if (partes.length === 1) sel.add(partes[0]);
+
+  f.innerHTML =
+    (livro ? '<div class="estado ok">✔ Está na lista</div>' : '<div class="estado no">✖ Não está na lista</div>') +
+    '<strong>' + esc(atual.titulo) + '</strong>' +
+    '<div class="meta">ISBN ' + esc(isbn) +
+      esc([atual.disciplina, atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) + '</div>' +
+    (partes.length > 1 ? '<div>Que parte vai para o stock?</div><div class="chips" id="chips"></div>' : '') +
+    '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="stock">unidade(s)</span></div>' +
+    '<button id="btnAdd" class="btn btn-acc">' + (livro ? 'Adicionar ao stock' : 'Adicionar mesmo assim') + '</button>' +
+    '<p class="stock" id="stockAtual"></p>';
+  f.classList.remove('hidden');
+
+  if (partes.length > 1) {
+    const c = document.getElementById('chips');
+    partes.concat(['Todas']).forEach(p => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = p;
+      b.onclick = () => {
+        if (p === 'Todas') { sel = sel.size === partes.length ? new Set() : new Set(partes); }
+        else sel.has(p) ? sel.delete(p) : sel.add(p);
+        [...c.children].forEach(ch => ch.classList.toggle('sel',
+          ch.textContent === 'Todas' ? sel.size === partes.length : sel.has(ch.textContent)));
+      };
+      c.appendChild(b);
+    });
+  }
+  document.getElementById('menos').onclick = () => { qtd = Math.max(1, qtd - 1); document.getElementById('nq').textContent = qtd; };
+  document.getElementById('mais').onclick = () => { qtd++; document.getElementById('nq').textContent = qtd; };
+  document.getElementById('btnAdd').onclick = adicionar;
+  escreverStock();
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function adicionar() {
+  if (!sel.size) { toast('Escolhe pelo menos uma parte.'); return; }
+  const b = document.getElementById('btnAdd');
+  b.disabled = true; b.textContent = 'A guardar…';
+  const partes = [...sel];
+  try {
+    const r = await api('adicionar', { isbn: atual.isbn, titulo: atual.titulo, anos: atual.anos.join(', '), partes, qtd });
+    STOCK = r.stock; escreverStock();
+    b.textContent = 'Adicionar ao stock';
+    toast('✔ ' + qtd + ' × ' + partes.join(' + ') + ' adicionado');
+  } catch (e) {
+    b.textContent = 'Tentar de novo'; toast('Erro: ' + e.message);
+  } finally {
+    b.disabled = false;
+  }
+}
+
+function escreverStock() {
+  const partes = nomesPartes(atual.partes);
+  document.getElementById('stockAtual').textContent = 'Em stock: ' +
+    partes.map(p => (partes.length > 1 ? p + ': ' : '') + (STOCK[atual.isbn + '|' + p] || 0)).join(' · ');
+}
+
+function nomesPartes(n) { return n > 1 ? Array.from({ length: n }, (_, i) => 'Parte ' + (i + 1)) : ['Único']; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function realce(isbn, q) { if (!q) return esc(isbn); const i = isbn.indexOf(q); return esc(isbn.slice(0, i)) + '<b>' + q + '</b>' + esc(isbn.slice(i + q.length)); }
+function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
+</script>
+</body>
+</html>
