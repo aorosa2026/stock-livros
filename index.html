@@ -86,7 +86,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 5</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 6</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -127,7 +127,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 5 · edições antigas</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 6 · leitura mais fiável</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -236,21 +236,55 @@ async function entrar(automatico) {
 }
 if (lerGuardado('stock_pw')) entrar(true);
 
-/* ---------- Leitura em direto ---------- */
+/* ---------- Validação do ISBN ----------
+   Um ISBN-13 começa por 978 ou 979 e o último dígito é de controlo.
+   Isto elimina leituras erradas e outros códigos de barras do livro (editora, preço…). */
+function isbnValido(c) {
+  if (!/^97[89]\d{10}$/.test(c)) return false;
+  let soma = 0;
+  for (let i = 0; i < 12; i++) soma += Number(c[i]) * (i % 2 ? 3 : 1);
+  return (10 - soma % 10) % 10 === Number(c[12]);
+}
+
+/* ---------- Leitura em direto ----------
+   Só aceita um código depois de o ler 2 vezes seguidas igual (evita leituras parciais erradas). */
+const LEITURAS_IGUAIS = 2;
+let ultimaLeitura = '', repeticoes = 0, ultimoAviso = 0;
+
 document.getElementById('btnLer').onclick = async () => {
   if (scanner) { await pararLeitor(); return; }
+  ultimaLeitura = ''; repeticoes = 0;
   scanner = new Html5Qrcode('leitor', { verbose: false,
-    formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8],
+    formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
     experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
   document.getElementById('btnLer').textContent = '✖ Parar leitura';
+  const config = { fps: 15, qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.4, 150) }) };
+  const aoLer = async txt => {
+    const c = String(txt).replace(/\D/g, '');
+    if (!isbnValido(c)) {
+      if (/^\d{13}$/.test(c) && Date.now() - ultimoAviso > 2500) {
+        ultimoAviso = Date.now();
+        toast('Isto não é um ISBN. Aponta para o código que começa por 978 ou 979.');
+      }
+      ultimaLeitura = ''; repeticoes = 0;
+      return;
+    }
+    if (c === ultimaLeitura) repeticoes++; else { ultimaLeitura = c; repeticoes = 1; }
+    if (repeticoes < LEITURAS_IGUAIS) return;
+    if (navigator.vibrate) navigator.vibrate(80);
+    await pararLeitor();
+    procurar(c);
+  };
   try {
-    await scanner.start({ facingMode: 'environment' },
-      { fps: 12, qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.4, 150) }) },
-      async txt => {
-        if (navigator.vibrate) navigator.vibrate(80);
-        await pararLeitor();
-        procurar(txt.replace(/\D/g, ''));
-      });
+    // Pede mais resolução e foco contínuo; se o telemóvel não aceitar, abre com as definições normais
+    try {
+      await scanner.start({ facingMode: 'environment' }, Object.assign({}, config, {
+        videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 },
+          advanced: [{ focusMode: 'continuous' }] } }), aoLer);
+    } catch (e1) {
+      try { await scanner.stop(); } catch (e) {}
+      await scanner.start({ facingMode: 'environment' }, config, aoLer);
+    }
   } catch (e) {
     await pararLeitor();
     toast('Não foi possível abrir a câmara. Verifica a autorização da câmara para este site, ou tira uma foto.');
@@ -268,21 +302,27 @@ foto.addEventListener('change', async () => {
   const f = foto.files && foto.files[0];
   if (!f) return;
   toast('A ler o código…');
-  let isbn = '';
+  let isbn = '', outro = false;
   if ('BarcodeDetector' in window) {
     try {
-      const r = await new BarcodeDetector({ formats: ['ean_13', 'ean_8'] }).detect(await createImageBitmap(f));
-      isbn = (r[0] && r[0].rawValue || '').replace(/\D/g, '');
+      // Uma foto pode ter vários códigos: escolhe o que for ISBN válido
+      const r = await new BarcodeDetector({ formats: ['ean_13'] }).detect(await createImageBitmap(f));
+      const cods = r.map(x => String(x.rawValue).replace(/\D/g, ''));
+      isbn = cods.find(isbnValido) || '';
+      outro = !isbn && cods.length > 0;
     } catch (e) {}
   }
   if (!isbn) {
     try {
-      const l = new Html5Qrcode('leitor', { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8] });
-      isbn = String(await l.scanFile(f, false)).replace(/\D/g, '');
+      const l = new Html5Qrcode('leitor', { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13] });
+      const c = String(await l.scanFile(f, false)).replace(/\D/g, '');
       l.clear();
+      if (isbnValido(c)) isbn = c; else if (c) outro = true;
     } catch (e) {}
   }
-  if (isbn) procurar(isbn); else toast('Não consegui ler o código. Tenta outra foto, ou pesquisa por números.');
+  if (isbn) procurar(isbn);
+  else if (outro) toast('O código lido não é um ISBN. Fotografa o código que começa por 978 ou 979.');
+  else toast('Não consegui ler o código. Tenta outra foto, ou pesquisa por números.');
 });
 
 /* ---------- Pesquisa ---------- */
@@ -402,6 +442,14 @@ function mostrar(livro, isbn) {
 function mostrarNaoExiste(isbn) {
   atual = null;
   const f = document.getElementById('ficha');
+  if (!isbnValido(isbn)) {
+    f.innerHTML = '<div class="estado no">✖ ISBN inválido</div>' +
+      '<div class="meta">' + esc(isbn) + '</div>' +
+      '<p>Este número não é um ISBN válido — provavelmente há um dígito trocado. Confirma os números no livro.</p>';
+    f.classList.remove('hidden');
+    f.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
   f.innerHTML =
     '<div class="estado no">✖ Este ISBN não está na lista</div>' +
     '<div class="meta">ISBN ' + esc(isbn) + '</div>' +
