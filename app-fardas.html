@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v6</title>
+<title>Stock de Fardas v7</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -48,6 +48,20 @@
   #resultados { list-style:none; padding:0; margin:10px 0 0; }
   #resultados li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   #resultados li small { color:var(--muted); display:block; margin-top:2px; }
+  #resultados li.aberto { border-color:var(--acc); border-width:2px; }
+  #resultados > #ficha { margin:-2px 0 10px; border:2px solid var(--acc); border-top-left-radius:0; border-top-right-radius:0; }
+  /* medir */
+  .tabs button { font-size:.88rem; padding:10px 4px; }
+  #numCm { font-size:1.6rem; font-weight:700; text-align:center; }
+  .resMed { text-align:center; padding:14px 10px; border-radius:14px; background:var(--ok); margin-top:12px; }
+  .resMed .t { font-size:.9rem; color:#155443; }
+  .resMed .n { font-size:2.6rem; font-weight:800; color:#155443; line-height:1.1; }
+  .resMed.fora { background:#fff6db; } .resMed.fora .t, .resMed.fora .n { color:#7a5a00; }
+  .resMed small { display:block; color:var(--muted); margin-top:4px; }
+  .comoMedir { background:var(--bg); border-radius:10px; padding:8px 10px; font-size:.88rem; color:var(--muted); margin-top:8px; }
+  #pecasMed { list-style:none; padding:0; margin:8px 0 0; }
+  #pecasMed li { display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:6px; cursor:pointer; }
+  #pecasMed li small { display:block; color:var(--muted); }
   .badge { min-width:38px; text-align:center; border-radius:999px; padding:4px 10px; font-weight:700; background:var(--ok); color:#155443; flex-shrink:0; }
   .badge.zero { background:var(--no); color:#8a2c1f; }
 
@@ -139,11 +153,12 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v6</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v7</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
       <button data-tab="at">🧾 Atendimento</button>
+      <button data-tab="med">📏 Medir</button>
     </nav>
 
     <!-- Separador: Inventário -->
@@ -160,12 +175,31 @@
       <div id="blocoSub" class="hidden"><div class="filtro-tit">Tipo de peça</div><div class="chips" id="fSub"></div></div>
       <div id="blocoTam" class="hidden"><div class="filtro-tit">Tamanho</div><div class="chips" id="fTam"></div></div>
 
-      <div id="ficha" class="card hidden"></div>
+      <div id="fichaCasa"><div id="ficha" class="card hidden"></div></div>
 
       <p id="contagem" class="meta"></p>
       <ul id="resultados"></ul>
       <p id="carregar" class="meta">A carregar lista…</p>
       <p class="meta"><a id="linkQR" target="_blank" rel="noopener">🖨 Imprimir etiquetas QR</a></p>
+    </div>
+
+    <!-- Separador: Medir -->
+    <div id="tabMed" class="hidden">
+      <div class="card" style="margin-top:0">
+        <div class="filtro-tit" style="margin-top:0">1. O que é?</div>
+        <div class="chips" id="medTipo"></div>
+        <div id="blocoMarca" class="hidden"><div class="filtro-tit">2. Marca / loja</div><div class="chips" id="medMarca"></div></div>
+        <div class="filtro-tit" id="titCm">2. Comprimento (cm)</div>
+        <input id="numCm" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        <div id="comoMedir" class="comoMedir hidden"></div>
+        <div id="resMed"></div>
+      </div>
+      <div id="blocoPecasMed" class="card hidden">
+        <div class="sec-tit">Peças com este tamanho <small id="nPecasMed"></small></div>
+        <input id="filtroMed" type="search" placeholder="Filtra: polo, saia, bibe…" autocomplete="off" style="margin-top:0">
+        <ul id="pecasMed"></ul>
+      </div>
+      <p class="meta" id="semMedidas"></p>
     </div>
 
     <!-- Separador: Atendimento -->
@@ -224,6 +258,7 @@
 <div id="msg"></div>
 
 <script>
+let MEDIDAS = [];
 let ESTADOS = [{ chave: 'Boa', nome: 'Boa (sem arranjos)', pct: 1 }], estSel = 'Boa';
 let ARTIGOS = [], scanner = null, scanBtn = null, scanTxt = '', atual = null, qtd = 1, motivo = '', AVISO_PRECOS = '';
 const filtro = { cat: '', sub: '', tam: '' };
@@ -269,6 +304,7 @@ async function entrar(automatico) {
     ARTIGOS = d.artigos;
     AVISO_PRECOS = d.avisoPrecos || '';
     if (d.estados && d.estados.length) ESTADOS = d.estados;
+    MEDIDAS = d.medidas || [];
     ARTIGOS.forEach(normalizarArtigo);
     document.getElementById('carregar').textContent = ARTIGOS.length + ' artigos na lista · ' + nome;
     document.getElementById('ecraEntrada').classList.add('hidden');
@@ -288,14 +324,16 @@ async function entrar(automatico) {
 if (lerGuardado('fardas_pw')) entrar(true);
 
 /* ---------- Separadores ---------- */
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('sel', x === b));
-  const at = b.dataset.tab === 'at';
+const SEPARADORES = { inv: 'tabInv', at: 'tabAt', med: 'tabMed' };
+async function irPara(tab) {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('sel', x.dataset.tab === tab));
   await pararLeitor();
-  document.getElementById('tabInv').classList.toggle('hidden', at);
-  document.getElementById('tabAt').classList.toggle('hidden', !at);
-  if (at) { desenharFiltrosA(); listarA(); desenharAt(); carregarHist(); } else filtrar();
-});
+  Object.entries(SEPARADORES).forEach(([t, id]) => document.getElementById(id).classList.toggle('hidden', t !== tab));
+  if (tab === 'at') { desenharFiltrosA(); listarA(); desenharAt(); carregarHist(); }
+  else if (tab === 'med') desenharMedir();
+  else filtrar();
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => irPara(b.dataset.tab));
 document.getElementById('linkQR').href = API_URL + '?action=folhaqr';
 
 /* ---------- Leitura QR em direto ---------- */
@@ -416,6 +454,7 @@ function filtrar() {
   const q = semAcentos(campo.value.trim());
   const palavras = q ? q.split(/\s+/) : [];
   const ul = document.getElementById('resultados'), cont = document.getElementById('contagem');
+  document.getElementById('fichaCasa').appendChild(document.getElementById('ficha'));   // tira a ficha da lista antes de a refazer
   ul.innerHTML = '';
   if (!palavras.length && !filtro.cat && !filtro.sub && !filtro.tam) {
     cont.textContent = 'Lê um QR, escreve na pesquisa ou escolhe uma categoria.';
@@ -434,10 +473,32 @@ function filtrar() {
     li.innerHTML = '<div>' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
       esc([a.categoria, a.subcategoria, a.id].filter(Boolean).join(' · ')) + '</small></div>' +
       '<span class="badge' + (a.stock ? '' : ' zero') + '">' + a.stock + '</span>';
-    li.onclick = () => mostrar(a);
+    li.dataset.id = a.id;
+    li.onclick = () => {
+      const f = document.getElementById('ficha');
+      if (atual === a && !f.classList.contains('hidden') && f.parentNode === ul) { fecharFicha(); return; }   // tocar outra vez fecha
+      mostrar(a);
+    };
     ul.appendChild(li);
   });
   if (res.length > 80) cont.textContent += ' (a mostrar 80 — afina a pesquisa)';
+  colocarFicha();
+}
+
+/* A ficha abre logo por baixo da peça tocada (e fecha a anterior). Se a peça não estiver na lista
+   (ex.: aberta por QR), fica no sítio de sempre, em cima. */
+function colocarFicha() {
+  const f = document.getElementById('ficha'), ul = document.getElementById('resultados');
+  ul.querySelectorAll('li.aberto').forEach(l => l.classList.remove('aberto'));
+  if (!atual || f.classList.contains('hidden')) return;
+  const li = [...ul.children].find(l => l.dataset && l.dataset.id === atual.id);
+  if (li) { li.classList.add('aberto'); ul.insertBefore(f, li.nextSibling); }
+  else document.getElementById('fichaCasa').appendChild(f);
+}
+function fecharFicha() {
+  document.getElementById('ficha').classList.add('hidden');
+  document.getElementById('fichaCasa').appendChild(document.getElementById('ficha'));
+  document.querySelectorAll('#resultados li.aberto').forEach(l => l.classList.remove('aberto'));
 }
 
 /* ---------- Ficha do artigo ---------- */
@@ -478,12 +539,14 @@ function mostrar(a) {
     };
     m.appendChild(b);
   });
-  document.getElementById('fechar').onclick = () => f.classList.add('hidden');
+  document.getElementById('fechar').onclick = fecharFicha;
   document.getElementById('menos').onclick = () => { qtd = Math.max(1, qtd - 1); document.getElementById('nq').textContent = qtd; };
   document.getElementById('mais').onclick = () => { qtd++; document.getElementById('nq').textContent = qtd; };
   document.getElementById('btnEnt').onclick = () => movimentar(+1);
   document.getElementById('btnSai').onclick = () => movimentar(-1);
-  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  colocarFicha();
+  const li = document.querySelector('#resultados li.aberto');
+  (li || f).scrollIntoView({ behavior: 'smooth', block: li ? 'start' : 'nearest' });
 }
 
 function desenharEstadosFicha() {
@@ -870,6 +933,106 @@ async function carregarHist() {
   } catch (e) { ul.innerHTML = '<li class="meta">Não consegui carregar: ' + esc(e.message) + '</li>'; }
 }
 document.getElementById('btnHist').onclick = carregarHist;
+
+/* =====================================================================
+   MEDIR: tipo (+ marca nos bibes) + comprimento → tamanho, pela folha Medidas
+   ===================================================================== */
+const med = { tipo: '', marca: null };
+function chips2(idEl, valores, atual, aoEscolher) {
+  const el = document.getElementById(idEl);
+  el.innerHTML = '';
+  valores.forEach(([v, rot]) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (atual === v ? ' sel' : '');
+    b.textContent = rot;
+    b.onclick = () => aoEscolher(v);
+    el.appendChild(b);
+  });
+}
+function desenharMedir() {
+  const aviso = document.getElementById('semMedidas');
+  if (!MEDIDAS.length) {
+    aviso.textContent = 'Ainda não há medidas: preenche a folha "Medidas" na Sheet (o "configurar" cria-a) e entra outra vez na app.';
+    document.querySelector('#tabMed .card').classList.add('hidden');
+    return;
+  }
+  aviso.textContent = '';
+  document.querySelector('#tabMed .card').classList.remove('hidden');
+  const tipos = unicos(MEDIDAS.map(m => m.tipo));
+  if (!tipos.includes(med.tipo)) med.tipo = tipos[0];
+  chips2('medTipo', tipos.map(t => [t, t]), med.tipo, v => { med.tipo = v; med.marca = null; desenharMedir(); });
+
+  const doTipo = MEDIDAS.filter(m => m.tipo === med.tipo);
+  const marcas = unicos(doTipo.map(m => m.marca));
+  const temGeral = doTipo.some(m => !m.marca);
+  const usaMarca = marcas.length > 0;
+  document.getElementById('blocoMarca').classList.toggle('hidden', !usaMarca);
+  if (usaMarca) {
+    const ops = marcas.map(m => [m, m]).concat(temGeral ? [['', 'Outra / não sei']] : []);
+    if (med.marca === null || !ops.some(o => o[0] === med.marca)) med.marca = ops[0][0];
+    chips2('medMarca', ops, med.marca, v => { med.marca = v; desenharMedir(); });
+  } else med.marca = '';
+  document.getElementById('titCm').textContent = (usaMarca ? '3' : '2') + '. Comprimento (cm)';
+
+  const nota = unicos(linhasMed().map(m => m.nota))[0];
+  const cm = document.getElementById('comoMedir');
+  cm.textContent = nota ? '📐 ' + nota : ''; cm.classList.toggle('hidden', !nota);
+  calcularMedida();
+}
+function linhasMed() {
+  return MEDIDAS.filter(m => m.tipo === med.tipo && (m.marca || '') === (med.marca || ''))
+    .sort((a, b) => a.de - b.de);
+}
+function calcularMedida() {
+  const res = document.getElementById('resMed'), bloco = document.getElementById('blocoPecasMed');
+  const txt = document.getElementById('numCm').value.trim().replace(',', '.');
+  const x = parseFloat(txt);
+  res.innerHTML = ''; bloco.classList.add('hidden');
+  if (!txt || isNaN(x)) return;
+  const ls = linhasMed();
+  if (!ls.length) { res.innerHTML = '<div class="resMed fora"><div class="t">Não há medidas para esta escolha na folha Medidas.</div></div>'; return; }
+  const cm = n => String(n).replace('.', ',') + ' cm';
+  const certa = ls.find(m => x >= m.de && x <= m.ate);
+  let tam;
+  if (certa) {
+    tam = certa.tamanho;
+    res.innerHTML = '<div class="resMed"><div class="t">Guardar no tamanho</div><div class="n">' + esc(tam) + '</div>' +
+      '<small>' + esc(med.tipo) + (med.marca ? ' · ' + esc(med.marca) : '') + ' · de ' + cm(certa.de) + ' a ' + cm(certa.ate) + '</small></div>';
+  } else {
+    // Fora da tabela ou num intervalo vazio: indica o mais próximo
+    const dist = m => x < m.de ? m.de - x : x - m.ate;
+    const perto = ls.slice().sort((a, b) => dist(a) - dist(b))[0];
+    tam = perto.tamanho;
+    res.innerHTML = '<div class="resMed fora"><div class="t">' + (x < ls[0].de ? 'Mais pequeno do que a tabela' : x > ls[ls.length - 1].ate ? 'Maior do que a tabela' : 'Fica entre dois tamanhos') +
+      ' — o mais próximo é</div><div class="n">' + esc(tam) + '</div><small>' + esc(tam) + ': de ' + cm(perto.de) + ' a ' + cm(perto.ate) + '. Confirma a medida ou acerta a folha Medidas.</small></div>';
+  }
+  listarPecasMed(tam);
+}
+function listarPecasMed(tam) {
+  const bloco = document.getElementById('blocoPecasMed'), ul = document.getElementById('pecasMed');
+  let q = semAcentos(document.getElementById('filtroMed').value.trim()).split(/\s+/).filter(Boolean);
+  // Se o tipo medido for o nome de uma peça (ex.: "Bibe"), mostra logo só essas peças
+  const t = semAcentos(med.tipo);
+  if (!q.length && ARTIGOS.some(a => semAcentos(a.subcategoria).includes(t))) q = [t];
+  const res = ARTIGOS.filter(a => semAcentos(a.tamanho) === semAcentos(tam) &&
+    q.every(p => semAcentos([a.categoria, a.subcategoria, a.descricao, a.id].join(' ')).includes(p)))
+    .sort((x, y) => x.subcategoria.localeCompare(y.subcategoria, 'pt'));
+  bloco.classList.remove('hidden');
+  document.getElementById('nPecasMed').textContent = res.length + (res.length === 1 ? ' peça' : ' peças');
+  ul.innerHTML = res.length ? '' : '<li class="meta" style="cursor:default">Nenhuma peça com o tamanho ' + esc(tam) + ' na folha Inventario.</li>';
+  res.slice(0, 60).forEach(a => {
+    const li = document.createElement('li');
+    li.innerHTML = '<div>' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' + esc([a.categoria, a.id].join(' · ')) + '</small></div>' +
+      '<span class="badge' + (a.stock ? '' : ' zero') + '">' + a.stock + '</span>';
+    li.onclick = async () => {        // abre a ficha no Inventário, pronta para dar entrada
+      await irPara('inv');
+      campo.value = a.id; filtrar(); mostrar(a);
+    };
+    ul.appendChild(li);
+  });
+}
+document.getElementById('numCm').addEventListener('input', calcularMedida);
+document.getElementById('filtroMed').addEventListener('input', calcularMedida);
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
