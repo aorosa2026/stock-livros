@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f6f5c">
+<title>Stock de Fardas</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  /* ======================================================================
+     LINHAS A ALTERAR
+     API_URL  → link da Aplicação Web do Apps Script do INVENTÁRIO (termina em /exec)
+     CALC_URL → link da calculadora (já preenchido)
+     ====================================================================== */
+  const API_URL  = 'COLAR_AQUI_O_LINK_DO_APPS_SCRIPT/exec';
+  const CALC_URL = 'https://script.google.com/macros/s/AKfycby52pdKuv-23L7tRdcbFsf6iww5ELnjP7-xSyE5xSwh_GeRq_7ujVrUM-_QMl-VxJE/exec';
+</script>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --ink:#1f2a2e; --muted:#6b7578; --acc:#1f6f5c; --ok:#e3f2ec; --no:#fbe9e7; --sai:#a3402e; --line:#e2ded6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  header { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:1.25rem; margin:4px 0 12px; }
+  label { display:block; margin-top:10px; font-size:.9rem; color:var(--muted); }
+  .sair { background:none; border:0; color:var(--muted); font-size:.85rem; text-decoration:underline; cursor:pointer; }
+  .btn { border:0; border-radius:12px; padding:14px 16px; font-size:1rem; font-weight:600; cursor:pointer; }
+  .btn-acc { background:var(--acc); color:#fff; width:100%; }
+  .btn-sai { background:#fff; color:var(--sai); border:2px solid var(--sai); width:100%; }
+  .btn:disabled { opacity:.6; }
+  .link { background:none; border:0; color:var(--acc); text-decoration:underline; font-size:.9rem; padding:8px 0; cursor:pointer; }
+
+  /* separadores */
+  .tabs { display:flex; gap:6px; background:#ebe7df; padding:4px; border-radius:12px; margin-bottom:14px; }
+  .tabs button { flex:1; border:0; background:none; padding:10px; border-radius:9px; font-size:.95rem; font-weight:600; color:var(--muted); cursor:pointer; }
+  .tabs button.sel { background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
+
+  #leitor { width:100%; margin-top:10px; border-radius:12px; overflow:hidden; }
+  input[type=search], input[type=text], input[type=password] { width:100%; padding:14px; font-size:1rem; border:1px solid var(--line); border-radius:12px; margin-top:6px; background:#fff; color:var(--ink); }
+  #pesquisa { margin-top:12px; }
+
+  .filtro-tit { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:12px 0 4px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 13px; font-size:.92rem; cursor:pointer; color:var(--ink); }
+  .chip.sel { background:var(--acc); color:#fff; border-color:var(--acc); }
+
+  #resultados { list-style:none; padding:0; margin:10px 0 0; }
+  #resultados li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #resultados li small { color:var(--muted); display:block; margin-top:2px; }
+  .badge { min-width:38px; text-align:center; border-radius:999px; padding:4px 10px; font-weight:700; background:var(--ok); color:#155443; flex-shrink:0; }
+  .badge.zero { background:var(--no); color:#8a2c1f; }
+
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-top:14px; border:1px solid var(--line); }
+  .cab { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .meta { color:var(--muted); font-size:.9rem; margin:4px 0 10px; }
+  .grande { font-size:1.05rem; margin:6px 0; }
+  .qtd { display:flex; align-items:center; gap:10px; margin:12px 0; }
+  .qtd button { width:42px; height:42px; border-radius:10px; border:1px solid var(--line); background:#fff; font-size:1.3rem; color:var(--ink); }
+  .qtd span { min-width:30px; text-align:center; font-size:1.2rem; font-weight:600; }
+  .acoes { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .fechar { float:right; background:none; border:0; font-size:1.2rem; color:var(--muted); cursor:pointer; }
+
+  #calc { width:100%; height:calc(100vh - 170px); min-height:480px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+
+  #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; z-index:10; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <!-- ===== Entrada ===== -->
+  <section id="ecraEntrada">
+    <h1>👕 Stock de Fardas</h1>
+    <div class="card">
+      <label>O teu nome<input id="nome" type="text" autocomplete="name" placeholder="ex.: Alexandra"></label>
+      <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
+      <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
+    </div>
+  </section>
+
+  <!-- ===== App ===== -->
+  <section id="ecraApp" class="hidden">
+    <header><h1>👕 Stock de Fardas</h1><button class="sair" id="btnSair">sair</button></header>
+
+    <nav class="tabs">
+      <button data-tab="inv" class="sel">👕 Inventário</button>
+      <button data-tab="calc">🧮 Calculadora</button>
+    </nav>
+
+    <!-- Separador: Inventário -->
+    <div id="tabInv">
+      <button id="btnLer" class="btn btn-acc">📷 Ler código QR</button>
+      <div id="leitor"></div>
+      <button id="btnFoto" class="link">Não lê? Tirar uma foto ao QR</button>
+      <input id="foto" type="file" accept="image/*" capture="environment" hidden>
+
+      <input id="pesquisa" type="search" placeholder="Escreve: polo, saia, 8, GIN…" autocomplete="off">
+
+      <div class="filtro-tit">Categoria</div>
+      <div class="chips" id="fCat"></div>
+      <div id="blocoSub" class="hidden"><div class="filtro-tit">Tipo de peça</div><div class="chips" id="fSub"></div></div>
+      <div id="blocoTam" class="hidden"><div class="filtro-tit">Tamanho</div><div class="chips" id="fTam"></div></div>
+
+      <div id="ficha" class="card hidden"></div>
+
+      <p id="contagem" class="meta"></p>
+      <ul id="resultados"></ul>
+      <p id="carregar" class="meta">A carregar lista…</p>
+    </div>
+
+    <!-- Separador: Calculadora -->
+    <div id="tabCalc" class="hidden">
+      <iframe id="calc" title="Calculadora"></iframe>
+      <p class="meta">Não aparece? <a id="calcLink" target="_blank" rel="noopener">Abrir a calculadora numa janela à parte</a></p>
+    </div>
+  </section>
+</main>
+<div id="msg"></div>
+
+<script>
+let ARTIGOS = [], scanner = null, atual = null, qtd = 1, motivo = '';
+const filtro = { cat: '', sub: '', tam: '' };
+const MOTIVOS = ['Doação', 'Troca', 'Venda', 'Acerto'];
+let SESSAO = { nome: '', pw: '' };
+
+/* ---------- Ligação ao Apps Script ---------- */
+async function api(acao, dados) {
+  let resp;
+  if (dados) {
+    // text/plain evita o pedido prévio (CORS) que o Apps Script não aceita
+    resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ acao, pw: SESSAO.pw, quem: SESSAO.nome }, dados)) });
+  } else {
+    resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw));
+  }
+  const j = await resp.json();
+  if (!j.ok) throw new Error(j.erro || 'Erro desconhecido');
+  return j;
+}
+
+/* ---------- Entrada ---------- */
+function guardar(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lerGuardado(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+
+document.getElementById('nome').value = lerGuardado('fardas_nome');
+document.getElementById('btnEntrar').onclick = entrar;
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+document.getElementById('btnSair').onclick = () => { guardar('fardas_pw', ''); location.reload(); };
+
+async function entrar(automatico) {
+  const nome = document.getElementById('nome').value.trim() || lerGuardado('fardas_nome');
+  const pw = automatico === true ? lerGuardado('fardas_pw') : document.getElementById('pw').value;
+  if (!nome) { toast('Escreve o teu nome.'); return; }
+  if (!pw) return;
+  SESSAO = { nome, pw };
+  const b = document.getElementById('btnEntrar');
+  b.disabled = true; b.textContent = 'A entrar…';
+  try {
+    const d = await api('dados');
+    guardar('fardas_nome', nome); guardar('fardas_pw', pw);
+    ARTIGOS = d.artigos;
+    document.getElementById('carregar').textContent = ARTIGOS.length + ' artigos na lista · ' + nome;
+    document.getElementById('ecraEntrada').classList.add('hidden');
+    document.getElementById('ecraApp').classList.remove('hidden');
+    desenharFiltros(); filtrar();
+    // Se o QR tiver o link da página com ?id=..., abre logo a ficha
+    const idLink = new URLSearchParams(location.search).get('id');
+    if (idLink) abrirPorCodigo(idLink);
+  } catch (e) {
+    guardar('fardas_pw', '');
+    if (automatico !== true) toast(API_URL.indexOf('/exec') < 0 || API_URL.indexOf('COLAR') >= 0
+      ? 'Falta colar o link do Apps Script no index.html.' : e.message);
+  } finally {
+    b.disabled = false; b.textContent = 'Entrar';
+  }
+}
+if (lerGuardado('fardas_pw')) entrar(true);
+
+/* ---------- Separadores ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('sel', x === b));
+  const calc = b.dataset.tab === 'calc';
+  document.getElementById('tabInv').classList.toggle('hidden', calc);
+  document.getElementById('tabCalc').classList.toggle('hidden', !calc);
+  if (calc) {
+    await pararLeitor();
+    const f = document.getElementById('calc');
+    if (!f.src) f.src = CALC_URL;   // só carrega na primeira vez
+  }
+});
+document.getElementById('calcLink').href = CALC_URL;
+
+/* ---------- Leitura QR em direto ---------- */
+document.getElementById('btnLer').onclick = async () => {
+  if (scanner) { await pararLeitor(); return; }
+  scanner = new Html5Qrcode('leitor', { verbose: false,
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  document.getElementById('btnLer').textContent = '✖ Parar leitura';
+  try {
+    await scanner.start({ facingMode: 'environment' },
+      { fps: 12, qrbox: (w, h) => { const s = Math.min(w, h) * 0.7; return { width: s, height: s }; } },
+      async txt => {
+        if (navigator.vibrate) navigator.vibrate(80);
+        await pararLeitor();
+        abrirPorCodigo(txt);
+      });
+  } catch (e) {
+    await pararLeitor();
+    toast('Não foi possível abrir a câmara. Verifica a autorização da câmara para este site, ou tira uma foto.');
+  }
+};
+async function pararLeitor() {
+  if (scanner) { try { await scanner.stop(); } catch (e) {} try { scanner.clear(); } catch (e) {} scanner = null; }
+  document.getElementById('btnLer').textContent = '📷 Ler código QR';
+}
+
+/* ---------- Leitura por foto (reserva) ---------- */
+const foto = document.getElementById('foto');
+document.getElementById('btnFoto').onclick = async () => { await pararLeitor(); foto.value = ''; foto.click(); };
+foto.addEventListener('change', async () => {
+  const f = foto.files && foto.files[0];
+  if (!f) return;
+  toast('A ler o código…');
+  let txt = '';
+  if ('BarcodeDetector' in window) {
+    try {
+      const r = await new BarcodeDetector({ formats: ['qr_code'] }).detect(await createImageBitmap(f));
+      txt = r[0] && r[0].rawValue || '';
+    } catch (e) {}
+  }
+  if (!txt) {
+    try {
+      const l = new Html5Qrcode('leitor', { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
+      txt = String(await l.scanFile(f, false));
+      l.clear();
+    } catch (e) {}
+  }
+  if (txt) abrirPorCodigo(txt); else toast('Não consegui ler o QR. Tenta outra foto, ou escreve na pesquisa.');
+});
+
+/* O QR pode ter só o código (ex.: UNI-POLO-MC-8) ou um link com ?id=UNI-POLO-MC-8 */
+function abrirPorCodigo(txt) {
+  let id = String(txt).trim();
+  try { const u = new URL(id); id = u.searchParams.get('id') || id; } catch (e) {}
+  const a = ARTIGOS.find(x => x.id.toLowerCase() === id.toLowerCase());
+  if (a) mostrar(a); else toast('Este código não está na lista: ' + id);
+}
+
+/* ---------- Filtros (categoria → tipo → tamanho) ---------- */
+const ORDEM_TAM = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+function chaveTam(t) {
+  const n = parseFloat(String(t).replace(',', '.'));
+  if (!isNaN(n)) return [0, n, ''];
+  const i = ORDEM_TAM.indexOf(String(t).toUpperCase());
+  return i >= 0 ? [1, i, ''] : [2, 0, String(t)];
+}
+function ordTam(a, b) {
+  const x = chaveTam(a), y = chaveTam(b);
+  return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2], 'pt');
+}
+function unicos(lista) { return [...new Set(lista.filter(Boolean))]; }
+
+function desenharFiltros() {
+  const cats = unicos(ARTIGOS.map(a => a.categoria));
+  const doCat = ARTIGOS.filter(a => !filtro.cat || a.categoria === filtro.cat);
+  const subs = filtro.cat ? unicos(doCat.map(a => a.subcategoria)) : [];
+  if (!subs.includes(filtro.sub)) filtro.sub = '';
+  const doSub = doCat.filter(a => !filtro.sub || a.subcategoria === filtro.sub);
+  const tams = unicos(doSub.map(a => a.tamanho)).sort(ordTam);
+  if (!tams.includes(filtro.tam)) filtro.tam = '';
+
+  chips('fCat', cats, 'cat', 'Todas');
+  chips('fSub', subs, 'sub', 'Todos');
+  chips('fTam', tams, 'tam', 'Todos');
+  document.getElementById('blocoSub').classList.toggle('hidden', !subs.length);
+  document.getElementById('blocoTam').classList.toggle('hidden', !tams.length || (!filtro.cat && !filtro.sub));
+}
+
+function chips(idEl, valores, chave, rotuloTodos) {
+  const el = document.getElementById(idEl);
+  el.innerHTML = '';
+  [''].concat(valores).forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (filtro[chave] === v ? ' sel' : '');
+    b.textContent = v || rotuloTodos;
+    b.onclick = () => {
+      filtro[chave] = v;
+      if (chave === 'cat') filtro.sub = '';
+      desenharFiltros(); filtrar();
+    };
+    el.appendChild(b);
+  });
+}
+
+/* ---------- Pesquisa / lista ---------- */
+const campo = document.getElementById('pesquisa');
+campo.addEventListener('input', filtrar);
+
+function semAcentos(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function nomeArtigo(a) { return a.descricao || a.subcategoria || a.id; }
+
+function filtrar() {
+  const q = semAcentos(campo.value.trim());
+  const palavras = q ? q.split(/\s+/) : [];
+  const ul = document.getElementById('resultados'), cont = document.getElementById('contagem');
+  ul.innerHTML = '';
+  if (!palavras.length && !filtro.cat && !filtro.sub && !filtro.tam) {
+    cont.textContent = 'Lê um QR, escreve na pesquisa ou escolhe uma categoria.';
+    return;
+  }
+  const res = ARTIGOS.filter(a =>
+    (!filtro.cat || a.categoria === filtro.cat) &&
+    (!filtro.sub || a.subcategoria === filtro.sub) &&
+    (!filtro.tam || a.tamanho === filtro.tam) &&
+    palavras.every(p => semAcentos([a.id, a.categoria, a.subcategoria, a.tamanho, a.descricao].join(' ')).includes(p)));
+  const total = res.reduce((s, a) => s + a.stock, 0);
+  cont.textContent = res.length + (res.length === 1 ? ' artigo' : ' artigos') + ' · ' + total + ' peças em stock';
+
+  res.slice(0, 80).forEach(a => {
+    const li = document.createElement('li');
+    li.innerHTML = '<div>' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
+      esc([a.categoria, a.subcategoria, a.id].filter(Boolean).join(' · ')) + '</small></div>' +
+      '<span class="badge' + (a.stock ? '' : ' zero') + '">' + a.stock + '</span>';
+    li.onclick = () => mostrar(a);
+    ul.appendChild(li);
+  });
+  if (res.length > 80) cont.textContent += ' (a mostrar 80 — afina a pesquisa)';
+}
+
+/* ---------- Ficha do artigo ---------- */
+function mostrar(a) {
+  atual = a; qtd = 1; motivo = '';
+  const f = document.getElementById('ficha');
+  f.innerHTML =
+    '<button class="fechar" id="fechar" aria-label="Fechar">✕</button>' +
+    '<div class="cab"><strong>' + esc(nomeArtigo(a)) + ' · tam. ' + esc(a.tamanho) + '</strong></div>' +
+    '<div class="meta">' + esc([a.categoria, a.subcategoria, 'código ' + a.id].filter(Boolean).join(' · ')) + '</div>' +
+    '<div class="grande">Em stock: <b id="stk">' + a.stock + '</b></div>' +
+    '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="meta">peça(s)</span></div>' +
+    '<div class="filtro-tit">Motivo (opcional)</div><div class="chips" id="motivos"></div>' +
+    '<div class="acoes"><button id="btnSai" class="btn btn-sai">− Saída</button><button id="btnEnt" class="btn btn-acc">+ Entrada</button></div>';
+  f.classList.remove('hidden');
+
+  const m = document.getElementById('motivos');
+  MOTIVOS.forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = t;
+    b.onclick = () => {
+      motivo = motivo === t ? '' : t;
+      [...m.children].forEach(c => c.classList.toggle('sel', c.textContent === motivo));
+    };
+    m.appendChild(b);
+  });
+  document.getElementById('fechar').onclick = () => f.classList.add('hidden');
+  document.getElementById('menos').onclick = () => { qtd = Math.max(1, qtd - 1); document.getElementById('nq').textContent = qtd; };
+  document.getElementById('mais').onclick = () => { qtd++; document.getElementById('nq').textContent = qtd; };
+  document.getElementById('btnEnt').onclick = () => movimentar(+1);
+  document.getElementById('btnSai').onclick = () => movimentar(-1);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function movimentar(sinal) {
+  if (sinal < 0 && qtd > atual.stock) { toast('Só há ' + atual.stock + ' em stock.'); return; }
+  const botoes = [document.getElementById('btnEnt'), document.getElementById('btnSai')];
+  botoes.forEach(b => b.disabled = true);
+  try {
+    const r = await api('mover', { id: atual.id, delta: sinal * qtd, motivo });
+    atual.stock = r.stock;
+    document.getElementById('stk').textContent = r.stock;
+    filtrar();
+    toast('✔ ' + (sinal > 0 ? '+' : '−') + qtd + ' · ' + nomeArtigo(atual) + ' ' + atual.tamanho + ' → stock ' + r.stock);
+  } catch (e) {
+    toast('Erro: ' + e.message);
+  } finally {
+    botoes.forEach(b => b.disabled = false);
+  }
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
+</script>
+</body>
+</html>
