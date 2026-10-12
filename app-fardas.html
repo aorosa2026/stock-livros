@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v4</title>
+<title>Stock de Fardas v5</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -112,6 +112,14 @@
   #talaoEsc .topo { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
   #talaoEsc .obs { margin-top:6px; padding:6px 8px; border-left:4px solid #f9ab00; background:#fff8e1; font-size:.85rem; white-space:pre-wrap; }
   .conta { font-size:.9rem; color:var(--muted); margin-top:4px; }
+  .estados { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin:8px 0 4px; }
+  .est { border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:#fff; cursor:pointer; text-align:left; color:var(--ink); font-size:.9rem; }
+  .est b { font-size:1.1rem; }
+  .est small { display:block; color:var(--muted); }
+  .est.sel { border:2px solid var(--acc); background:var(--ok); }
+  .est.vazio { opacity:.55; }
+  .btn-arranjo { background:#fff6db; color:#7a5a00; width:100%; margin-top:8px; }
+  select.estSel { font:inherit; font-size:.82rem; padding:3px 4px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); margin-top:3px; max-width:100%; }
 
   #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; z-index:10; }
   .hidden { display:none !important; }
@@ -131,7 +139,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v4</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v5</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -211,6 +219,7 @@
 <div id="msg"></div>
 
 <script>
+let ESTADOS = [{ chave: 'Boa', nome: 'Boa (sem arranjos)', pct: 1 }], estSel = 'Boa';
 let ARTIGOS = [], scanner = null, scanBtn = null, scanTxt = '', atual = null, qtd = 1, motivo = '', AVISO_PRECOS = '';
 const filtro = { cat: '', sub: '', tam: '' };
 const MOTIVOS = ['Doação', 'Troca', 'Venda', 'Acerto'];
@@ -254,6 +263,8 @@ async function entrar(automatico) {
     guardar('fardas_nome', nome); guardar('fardas_pw', pw);
     ARTIGOS = d.artigos;
     AVISO_PRECOS = d.avisoPrecos || '';
+    if (d.estados && d.estados.length) ESTADOS = d.estados;
+    ARTIGOS.forEach(normalizarArtigo);
     document.getElementById('carregar').textContent = ARTIGOS.length + ' artigos na lista · ' + nome;
     document.getElementById('ecraEntrada').classList.add('hidden');
     document.getElementById('ecraApp').classList.remove('hidden');
@@ -425,20 +436,33 @@ function filtrar() {
 }
 
 /* ---------- Ficha do artigo ---------- */
+/* Garante est (stock por estado) e precos (preço por estado) mesmo com o Apps Script antigo */
+function normalizarArtigo(a) {
+  if (!a.est) a.est = { Boa: a.stock };
+  ESTADOS.forEach(e => { if (a.est[e.chave] == null) a.est[e.chave] = 0; });
+  if (!a.precos) { a.precos = {}; ESTADOS.forEach(e => a.precos[e.chave] = a.preco); }
+  a.stock = ESTADOS.reduce((s, e) => s + (a.est[e.chave] || 0), 0);
+}
+const nomeEst = k => (ESTADOS.find(e => e.chave === k) || { nome: k }).nome;
+const precoEst = (a, k) => a.precos ? a.precos[k] : a.preco;
+
 function mostrar(a) {
   atual = a; qtd = 1; motivo = '';
+  if (!ESTADOS.some(e => e.chave === estSel)) estSel = 'Boa';
   const f = document.getElementById('ficha');
   f.innerHTML =
     '<button class="fechar" id="fechar" aria-label="Fechar">✕</button>' +
     '<div class="cab"><strong>' + esc(nomeArtigo(a)) + ' · tam. ' + esc(a.tamanho) + '</strong></div>' +
     '<div class="meta">' + esc([a.categoria, a.subcategoria, 'código ' + a.id].filter(Boolean).join(' · ')) + '</div>' +
-    '<div class="grande">Em stock: <b id="stk">' + a.stock + '</b>' +
-      (a.preco != null ? ' · <span class="meta">' + eur(a.preco) + '</span>' : '') + '</div>' +
+    '<div class="grande">Em stock: <b id="stk">' + a.stock + '</b></div>' +
+    '<div class="filtro-tit">Estado — escolhe para a entrada/saída</div><div class="estados" id="estados"></div>' +
+    '<div id="zonaArranjo"></div>' +
     '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="meta">peça(s)</span></div>' +
     '<div class="filtro-tit">Motivo (opcional)</div><div class="chips" id="motivos"></div>' +
     '<div class="acoes"><button id="btnSai" class="btn btn-sai">− Saída</button><button id="btnEnt" class="btn btn-acc">+ Entrada</button></div>';
   f.classList.remove('hidden');
 
+  desenharEstadosFicha();
   const m = document.getElementById('motivos');
   MOTIVOS.forEach(t => {
     const b = document.createElement('button');
@@ -457,16 +481,50 @@ function mostrar(a) {
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function desenharEstadosFicha() {
+  const a = atual, el = document.getElementById('estados');
+  if (!el) return;
+  el.innerHTML = '';
+  ESTADOS.forEach(e => {
+    const b = document.createElement('button');
+    const n = a.est[e.chave] || 0;
+    b.className = 'est' + (estSel === e.chave ? ' sel' : '') + (n ? '' : ' vazio');
+    b.innerHTML = '<b>' + n + '</b> ' + esc(e.nome) +
+      '<small>' + (precoEst(a, e.chave) != null ? eur(precoEst(a, e.chave)) : 'sem preço') + '</small>';
+    b.onclick = () => { estSel = e.chave; desenharEstadosFicha(); };
+    el.appendChild(b);
+  });
+  document.getElementById('stk').textContent = a.stock;
+  // Peças à espera de arranjo: botão para as passar a "rota arranjada"
+  const z = document.getElementById('zonaArranjo'), nA = a.est['A arranjar'] || 0;
+  z.innerHTML = '';
+  if (nA && ESTADOS.some(e => e.chave === 'Arranjada')) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-arranjo';
+    b.textContent = '🧵 Já arranjei 1 → passa a "' + nomeEst('Arranjada') + '" (' + nA + ' por arranjar)';
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        const r = await api('mudarEstado', { id: a.id, de: 'A arranjar', para: 'Arranjada', qtd: 1 });
+        atualizarStocks(r.stocks); desenharEstadosFicha(); filtrar();
+        toast('✔ 1 peça passou para ' + nomeEst('Arranjada').toLowerCase());
+      } catch (e) { toast('Erro: ' + e.message); b.disabled = false; }
+    };
+    z.appendChild(b);
+  }
+}
+
 async function movimentar(sinal) {
-  if (sinal < 0 && qtd > atual.stock) { toast('Só há ' + atual.stock + ' em stock.'); return; }
+  const noEstado = atual.est[estSel] || 0;
+  if (sinal < 0 && qtd > noEstado) { toast('Só há ' + noEstado + ' em "' + nomeEst(estSel) + '".'); return; }
   const botoes = [document.getElementById('btnEnt'), document.getElementById('btnSai')];
   botoes.forEach(b => b.disabled = true);
   try {
-    const r = await api('mover', { id: atual.id, delta: sinal * qtd, motivo });
-    atual.stock = r.stock;
-    document.getElementById('stk').textContent = r.stock;
+    const r = await api('mover', { id: atual.id, delta: sinal * qtd, motivo, estado: estSel });
+    if (r.stocks) atualizarStocks(r.stocks); else { atual.stock = r.stock; atual.est = { Boa: r.stock }; normalizarArtigo(atual); }
+    desenharEstadosFicha();
     filtrar();
-    toast('✔ ' + (sinal > 0 ? '+' : '−') + qtd + ' · ' + nomeArtigo(atual) + ' ' + atual.tamanho + ' → stock ' + r.stock);
+    toast('✔ ' + (sinal > 0 ? '+' : '−') + qtd + ' · ' + nomeArtigo(atual) + ' ' + atual.tamanho + ' (' + nomeEst(estSel).toLowerCase() + ') → stock ' + atual.stock);
   } catch (e) {
     toast('Erro: ' + e.message);
   } finally {
@@ -477,16 +535,39 @@ async function movimentar(sinal) {
 /* =====================================================================
    ATENDIMENTO
    ===================================================================== */
-const CARRO = { leva: {}, entrega: {} };   // { id: quantidade }
+const CARRO = { leva: {}, entrega: {} };   // { 'id|estado': quantidade }
 let idPendente = null;                     // mantém o mesmo código se for preciso repetir o envio
 
 const eur = n => (n || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const art = id => ARTIGOS.find(a => a.id === id);
+const chaveC = (id, est) => id + '|' + est;
+const partes = k => { const i = k.lastIndexOf('|'); return [k.slice(0, i), k.slice(i + 1)]; };
 
-function juntar(tipo, a, n) {
+/* Estado por defeito: quem entrega → "Boa" (muda-se na linha se for preciso);
+   quem leva → o primeiro estado que ainda tem peças disponíveis */
+function estadoPorDefeito(tipo, a) {
+  if (tipo === 'entrega') return 'Boa';
+  const e = ESTADOS.find(e => disponivel(a, e.chave) > 0);
+  return e ? e.chave : 'Boa';
+}
+function disponivel(a, est) {
+  return (a.est[est] || 0) + (CARRO.entrega[chaveC(a.id, est)] || 0) - (CARRO.leva[chaveC(a.id, est)] || 0);
+}
+
+function juntar(tipo, a, n, est) {
   if (!a) return;
-  CARRO[tipo][a.id] = Math.max(0, (CARRO[tipo][a.id] || 0) + (n || 1));
-  if (!CARRO[tipo][a.id]) delete CARRO[tipo][a.id];
+  est = est || estadoPorDefeito(tipo, a);
+  const k = chaveC(a.id, est);
+  CARRO[tipo][k] = Math.max(0, (CARRO[tipo][k] || 0) + (n || 1));
+  if (!CARRO[tipo][k]) delete CARRO[tipo][k];
+  idPendente = null;
+  desenharAt();
+}
+function mudarEstadoLinha(tipo, k, novo) {
+  const [id] = partes(k), q = CARRO[tipo][k], k2 = chaveC(id, novo);
+  if (k2 === k) return;
+  delete CARRO[tipo][k];
+  CARRO[tipo][k2] = (CARRO[tipo][k2] || 0) + q;
   idPendente = null;
   desenharAt();
 }
@@ -507,7 +588,8 @@ pesqA.addEventListener('input', () => {
     .slice(0, 10).forEach(a => {
       const li = document.createElement('li');
       li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
-        (a.preco != null ? eur(a.preco) : 'sem preço') + ' · stock ' + a.stock + '</small></div>';
+        (precoEst(a, 'Boa') != null ? eur(precoEst(a, 'Boa')) : 'sem preço') + ' · stock ' + a.stock +
+        (a.stock !== (a.est.Boa || 0) ? ' (' + (a.est.Boa || 0) + ' boas)' : '') + '</small></div>';
       [['leva', '⬆ Leva'], ['entrega', '⬇ Entrega']].forEach(([t, r]) => {
         const b = document.createElement('button');
         b.className = 'pq ' + (t === 'leva' ? 'leva' : 'ent'); b.textContent = r;
@@ -586,15 +668,18 @@ function contasTalao(c) {
 
 function contas() {
   let tL = 0, tE = 0, nL = 0, nE = 0, semPreco = 0, falta = [];
-  Object.entries(CARRO.leva).forEach(([id, q]) => {
-    const a = art(id); if (!a) return;
-    nL += q; tL += q * (a.preco || 0); if (a.preco == null) semPreco++;
-    if (q > a.stock + (CARRO.entrega[id] || 0)) falta.push(a);
+  Object.entries(CARRO.leva).forEach(([k, q]) => {
+    const [id, est] = partes(k), a = art(id); if (!a) return;
+    const p = precoEst(a, est);
+    nL += q; tL += q * (p || 0); if (p == null) semPreco++;
+    if (q > (a.est[est] || 0) + (CARRO.entrega[k] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est).toLowerCase() + ')');
   });
-  Object.entries(CARRO.entrega).forEach(([id, q]) => {
-    const a = art(id); if (!a) return;
-    nE += q; tE += q * (a.preco || 0); if (a.preco == null) semPreco++;
+  Object.entries(CARRO.entrega).forEach(([k, q]) => {
+    const [id, est] = partes(k), a = art(id); if (!a) return;
+    const p = precoEst(a, est);
+    nE += q; tE += q * (p || 0); if (p == null) semPreco++;
   });
+  tL = r2(tL); tE = r2(tE);
   return { tL, tE, nL, nE, saldo: Math.round((tL - tE) * 100) / 100, semPreco, falta };
 }
 
@@ -604,18 +689,23 @@ function desenharAt() {
     ul.innerHTML = '';
     const ids = Object.keys(CARRO[tipo]);
     if (!ids.length) { ul.innerHTML = '<li class="vaziaL">Nenhuma peça.</li>'; return; }
-    ids.forEach(id => {
-      const a = art(id); if (!a) return;
-      const q = CARRO[tipo][id];
-      const semStock = tipo === 'leva' && q > a.stock + (CARRO.entrega[id] || 0);
+    ids.forEach(k => {
+      const [id, est] = partes(k), a = art(id); if (!a) return;
+      const q = CARRO[tipo][k], p = precoEst(a, est);
+      const semStock = tipo === 'leva' && q > (a.est[est] || 0) + (CARRO.entrega[k] || 0);
+      const opcoes = ESTADOS.map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
+        esc(e.nome) + (tipo === 'leva' ? ' (' + (a.est[e.chave] || 0) + ')' : '') +
+        (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
       const li = document.createElement('li');
       li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
-        (semStock ? '<small class="erro">Só há ' + a.stock + ' em stock</small>'
-                  : '<small>' + (a.preco != null ? eur(a.preco) + ' / peça' : '⚠ sem preço') + '</small>') + '</div>' +
+        '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
+        (semStock ? '<small class="erro">Só há ' + (a.est[est] || 0) + ' neste estado</small>'
+                  : '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small>') + '</div>' +
         '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
-        '<div class="sub">' + eur(q * (a.preco || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
-      li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntar(tipo, a, +b.dataset.d));
-      li.querySelector('.tira').onclick = () => juntar(tipo, a, -q);
+        '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+      li.querySelector('.estSel').onchange = e => mudarEstadoLinha(tipo, k, e.target.value);
+      li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntar(tipo, a, +b.dataset.d, est));
+      li.querySelector('.tira').onclick = () => juntar(tipo, a, -q, est);
       ul.appendChild(li);
     });
   });
@@ -640,7 +730,7 @@ function desenharAt() {
   if (AVISO_PRECOS) avisos.push('Não consegui ler os preços: ' + AVISO_PRECOS);
   if (c.semPreco) avisos.push('Há peças sem preço na folha Preços — contam como 0 €.');
   if (!TALAO && c.saldo < 0) avisos.push('Sem talão, este crédito não fica guardado. Escolhe o talão da pessoa (ou cria um novo no formulário).');
-  if (c.falta.length) avisos.push('Não há stock suficiente de: ' + c.falta.map(a => nomeArtigo(a) + ' ' + a.tamanho).join(', ') + '.');
+  if (c.falta.length) avisos.push('Não há stock suficiente de: ' + c.falta.join(', ') + '.');
   const av = document.getElementById('avisoAt');
   av.textContent = avisos.join(' '); av.classList.toggle('hidden', !avisos.length);
   document.getElementById('btnConfirmar').disabled = !(c.nL + c.nE) || c.falta.length > 0;
@@ -648,8 +738,11 @@ function desenharAt() {
 
 function resumoAt() {
   const c = contas(), l = [];
-  Object.entries(CARRO.leva).forEach(([id, q]) => { const a = art(id); l.push('Leva ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + ' = ' + eur(q * (a.preco || 0))); });
-  Object.entries(CARRO.entrega).forEach(([id, q]) => { const a = art(id); l.push('Entrega ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + ' = ' + eur(q * (a.preco || 0))); });
+  const linha = (t, k, q) => { const [id, est] = partes(k), a = art(id);
+    return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est).toLowerCase() + ')' : '') +
+      ' = ' + eur(q * (precoEst(a, est) || 0)); };
+  Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
+  Object.entries(CARRO.entrega).forEach(([k, q]) => l.push(linha('Entrega', k, q)));
   const ct = contasTalao(c);
   if (ct) {
     l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
@@ -681,8 +774,8 @@ document.getElementById('btnConfirmar').onclick = async () => {
   b.disabled = true; b.textContent = 'A gravar…';
   if (!idPendente) idPendente = 'A' + new Date().toISOString().replace(/\D/g, '').slice(2, 14) + '-' + Math.random().toString(36).slice(2, 5);
   const linhas = [];
-  Object.entries(CARRO.leva).forEach(([id, qtd]) => linhas.push({ id, tipo: 'leva', qtd }));
-  Object.entries(CARRO.entrega).forEach(([id, qtd]) => linhas.push({ id, tipo: 'entrega', qtd }));
+  Object.entries(CARRO.leva).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'leva', qtd, estado }); });
+  Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'entrega', qtd, estado }); });
   try {
     const r = await api('atendimento', { idAt: idPendente, talao: TALAO ? TALAO.canhao : '', linhas });
     atualizarStocks(r.stocks);
@@ -702,7 +795,9 @@ document.getElementById('btnConfirmar').onclick = async () => {
 
 function atualizarStocks(stocks) {
   Object.entries(stocks || {}).forEach(([id, n]) => {
-    const a = ARTIGOS.find(x => x.id.toLowerCase() === id.toLowerCase()); if (a) a.stock = n;
+    const a = ARTIGOS.find(x => x.id.toLowerCase() === id.toLowerCase()); if (!a) return;
+    if (typeof n === 'number') a.est = { Boa: n }; else a.est = n;
+    normalizarArtigo(a);
   });
 }
 
