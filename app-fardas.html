@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v3</title>
+<title>Stock de Fardas v4</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -98,6 +98,20 @@
   #hist .anulado { opacity:.55; text-decoration:line-through; }
   #hist small { color:var(--muted); display:block; margin-top:2px; }
   .link.vermelho { color:var(--sai); }
+  .talao-box { background:var(--bg); border-radius:12px; padding:10px 12px; margin:6px 0 14px; }
+  .talao-box .linha { display:flex; gap:8px; }
+  .talao-box .linha input { margin-top:0; }
+  .talao-box .linha .btn { width:auto; padding:10px 14px; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:.85rem; color:var(--muted); }
+  .chk input { width:18px; height:18px; }
+  #talaoLista { list-style:none; padding:0; margin:8px 0 0; }
+  #talaoLista li { background:#fff; border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:6px; cursor:pointer; font-size:.92rem; }
+  #talaoLista li.fechado { opacity:.55; cursor:default; }
+  #talaoLista small, #talaoEsc small { color:var(--muted); display:block; }
+  #talaoEsc { background:#fff; border:2px solid var(--acc); border-radius:10px; padding:10px 12px; }
+  #talaoEsc .topo { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+  #talaoEsc .obs { margin-top:6px; padding:6px 8px; border-left:4px solid #f9ab00; background:#fff8e1; font-size:.85rem; white-space:pre-wrap; }
+  .conta { font-size:.9rem; color:var(--muted); margin-top:4px; }
 
   #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; z-index:10; }
   .hidden { display:none !important; }
@@ -117,7 +131,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v3</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v4</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -162,11 +176,23 @@
         <div class="sec-tit ent">⬇ Entrega <small id="nEnt"></small></div>
         <ul id="lEnt" class="linhas"></ul>
 
+        <div class="sec-tit">🎟 Talão <small>opcional</small></div>
+        <div class="talao-box">
+          <div id="talaoEsc" class="hidden"></div>
+          <div id="talaoPesq">
+            <div class="linha">
+              <input id="talaoQ" type="search" placeholder="Nº do talão, nome ou telemóvel" autocomplete="off">
+              <button id="btnTalao" class="btn btn-acc">Procurar</button>
+            </div>
+            <label class="chk"><input type="checkbox" id="talaoFech"> incluir talões esgotados ou fechados</label>
+            <ul id="talaoLista"></ul>
+          </div>
+        </div>
+
         <div class="tot3"><span>Leva: <b id="tLeva">0,00 €</b></span><span>Entrega: <b id="tEnt">0,00 €</b></span></div>
         <div id="saldo" class="saldo"><small>Total</small>0,00 €</div>
         <div id="avisoAt" class="aviso hidden"></div>
 
-        <label>Nº do talão (opcional)<input id="talao" type="text" placeholder="ex.: 62/2025" autocomplete="off"></label>
         <div class="acoes">
           <button id="btnLimparAt" class="btn" style="background:#ebe7df">Limpar</button>
           <button id="btnCopiarAt" class="btn" style="background:#ebe7df">Copiar resumo</button>
@@ -191,14 +217,15 @@ const MOTIVOS = ['Doação', 'Troca', 'Venda', 'Acerto'];
 let SESSAO = { nome: '', pw: '' };
 
 /* ---------- Ligação ao Apps Script ---------- */
-async function api(acao, dados) {
+async function api(acao, dados, extra) {
   let resp;
   if (dados) {
     // text/plain evita o pedido prévio (CORS) que o Apps Script não aceita
     resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(Object.assign({ acao, pw: SESSAO.pw, quem: SESSAO.nome }, dados)) });
   } else {
-    resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw));
+    resp = await fetch(API_URL + '?acao=' + acao + '&pw=' + encodeURIComponent(SESSAO.pw) +
+      Object.entries(extra || {}).map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join(''));
   }
   const j = await resp.json();
   if (!j.ok) throw new Error(j.erro || 'Erro desconhecido');
@@ -491,6 +518,72 @@ pesqA.addEventListener('input', () => {
     });
 });
 
+/* ---------- Talão (mesmas regras da app de descontos) ---------- */
+let TALAO = null, TALOES = [];
+const r2 = n => Math.round(n * 100) / 100;
+
+async function procurarTalao() {
+  const q = document.getElementById('talaoQ').value.trim();
+  const ul = document.getElementById('talaoLista');
+  if (!q) return;
+  ul.innerHTML = '<li class="meta" style="cursor:default">A procurar…</li>';
+  try {
+    const r = await api('taloes', null, { q, fechados: document.getElementById('talaoFech').checked ? '1' : '0' });
+    TALOES = r.taloes;
+    if (!TALOES.length) {
+      ul.innerHTML = '<li class="meta" style="cursor:default">Sem resultados' +
+        (document.getElementById('talaoFech').checked ? '.' : ' (experimenta incluir esgotados/fechados).') + '</li>';
+      return;
+    }
+    if (TALOES.length === 1 && !TALOES[0].fechado) { escolherTalao(TALOES[0]); return; }
+    ul.innerHTML = '';
+    TALOES.forEach(t => {
+      const li = document.createElement('li');
+      if (t.fechado) li.className = 'fechado';
+      li.innerHTML = 'Nº <b>' + esc(t.canhao) + '</b>' + (t.livro ? ' · Canhão ' + esc(t.livro) : '') + ' · ' + nomeTalao(t) +
+        '<small>Saldo: <b>' + eur(t.saldo) + '</b>' + (t.fechado ? ' · fechado' : '') +
+        ((t.observacoes || t.historico.length) ? ' · 📝' : '') + '</small>';
+      if (!t.fechado) li.onclick = () => escolherTalao(t);
+      ul.appendChild(li);
+    });
+  } catch (e) { ul.innerHTML = '<li class="meta" style="cursor:default">Erro: ' + esc(e.message) + '</li>'; }
+}
+function nomeTalao(t) { return '<b>' + esc(t.encarregado) + '</b>' + (t.aluno ? ' (' + esc(t.aluno) + ')' : ''); }
+
+function escolherTalao(t) {
+  TALAO = t; idPendente = null;
+  const box = document.getElementById('talaoEsc');
+  box.innerHTML = '<div class="topo"><div>Nº <b>' + esc(t.canhao) + '</b>' + (t.livro ? ' · Canhão ' + esc(t.livro) : '') +
+      '<br>' + nomeTalao(t) + '<small>Saldo atual: <b>' + eur(t.saldo) + '</b> (crédito ' + eur(t.credito) +
+      (t.trocas ? ' + trocas ' + eur(t.trocas) : '') + ' − descontado ' + eur(t.descontado) + ')</small></div>' +
+      '<button class="tira" id="tiraTalao" title="Tirar o talão">✕</button></div>' +
+    ((t.observacoes || t.historico.length)
+      ? '<div class="obs"><b>Observações:</b>' + (t.observacoes ? '\nTalão: ' + esc(t.observacoes) : '') +
+        t.historico.map(h => '\n' + esc(h)).join('') + '</div>' : '');
+  box.classList.remove('hidden');
+  document.getElementById('talaoPesq').classList.add('hidden');
+  document.getElementById('tiraTalao').onclick = tirarTalao;
+  desenharAt();
+}
+function tirarTalao() {
+  TALAO = null; idPendente = null;
+  document.getElementById('talaoEsc').classList.add('hidden');
+  document.getElementById('talaoPesq').classList.remove('hidden');
+  document.getElementById('talaoLista').innerHTML = '';
+  document.getElementById('talaoQ').value = '';
+  desenharAt();
+}
+document.getElementById('btnTalao').onclick = procurarTalao;
+document.getElementById('talaoQ').addEventListener('keydown', e => { if (e.key === 'Enter') procurarTalao(); });
+
+/* Com talão: usa o saldo (+ o que entrega) até onde chegar; o resto paga-se */
+function contasTalao(c) {
+  if (!TALAO) return null;
+  const disp = r2(TALAO.saldo + c.tE);
+  const usado = r2(Math.min(c.tL, disp));
+  return { disp, usado, pagar: r2(c.tL - usado), fica: r2(disp - usado) };
+}
+
 function contas() {
   let tL = 0, tE = 0, nL = 0, nE = 0, semPreco = 0, falta = [];
   Object.entries(CARRO.leva).forEach(([id, q]) => {
@@ -532,12 +625,21 @@ function desenharAt() {
   document.getElementById('tLeva').textContent = eur(c.tL);
   document.getElementById('tEnt').textContent = eur(c.tE);
   const s = document.getElementById('saldo');
-  s.className = 'saldo' + (c.saldo > 0 ? ' pagar' : c.saldo < 0 ? ' credito' : '');
-  s.innerHTML = '<small>' + (c.saldo > 0 ? 'A pagar' : c.saldo < 0 ? 'Crédito a favor' : 'Total') + '</small>' + eur(Math.abs(c.saldo));
+  const ct = contasTalao(c);
+  if (ct) {
+    s.className = 'saldo' + (ct.pagar > 0 ? ' pagar' : ' credito');
+    s.innerHTML = '<small>' + (ct.pagar > 0 ? 'A pagar em dinheiro' : 'Nada a pagar') + '</small>' + eur(ct.pagar) +
+      '<div class="conta">Talão ' + esc(TALAO.canhao) + ': ' + eur(TALAO.saldo) + (c.tE ? ' + ' + eur(c.tE) : '') +
+      (c.tL ? ' − ' + eur(ct.usado) : '') + ' → fica com <b>' + eur(ct.fica) + '</b></div>';
+  } else {
+    s.className = 'saldo' + (c.saldo > 0 ? ' pagar' : c.saldo < 0 ? ' credito' : '');
+    s.innerHTML = '<small>' + (c.saldo > 0 ? 'A pagar' : c.saldo < 0 ? 'Crédito a favor' : 'Total') + '</small>' + eur(Math.abs(c.saldo));
+  }
 
   const avisos = [];
   if (AVISO_PRECOS) avisos.push('Não consegui ler os preços: ' + AVISO_PRECOS);
   if (c.semPreco) avisos.push('Há peças sem preço na folha Preços — contam como 0 €.');
+  if (!TALAO && c.saldo < 0) avisos.push('Sem talão, este crédito não fica guardado. Escolhe o talão da pessoa (ou cria um novo no formulário).');
   if (c.falta.length) avisos.push('Não há stock suficiente de: ' + c.falta.map(a => nomeArtigo(a) + ' ' + a.tamanho).join(', ') + '.');
   const av = document.getElementById('avisoAt');
   av.textContent = avisos.join(' '); av.classList.toggle('hidden', !avisos.length);
@@ -548,16 +650,20 @@ function resumoAt() {
   const c = contas(), l = [];
   Object.entries(CARRO.leva).forEach(([id, q]) => { const a = art(id); l.push('Leva ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + ' = ' + eur(q * (a.preco || 0))); });
   Object.entries(CARRO.entrega).forEach(([id, q]) => { const a = art(id); l.push('Entrega ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + ' = ' + eur(q * (a.preco || 0))); });
-  l.push((c.saldo > 0 ? 'A pagar: ' : c.saldo < 0 ? 'Crédito a favor: ' : 'Total: ') + eur(Math.abs(c.saldo)));
-  const t = document.getElementById('talao').value.trim();
-  if (t) l.push('Talão: ' + t);
+  const ct = contasTalao(c);
+  if (ct) {
+    l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
+    l.push('A pagar em dinheiro: ' + eur(ct.pagar));
+  } else {
+    l.push((c.saldo > 0 ? 'A pagar: ' : c.saldo < 0 ? 'Crédito a favor: ' : 'Total: ') + eur(Math.abs(c.saldo)));
+  }
   return l.join('\n');
 }
 
 function limparAt() {
   CARRO.leva = {}; CARRO.entrega = {}; idPendente = null;
-  document.getElementById('talao').value = ''; pesqA.value = ''; document.getElementById('sugA').innerHTML = '';
-  desenharAt();
+  pesqA.value = ''; document.getElementById('sugA').innerHTML = '';
+  tirarTalao();
 }
 document.getElementById('btnLimparAt').onclick = () => {
   if (Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length && !confirm('Limpar este atendimento?')) return;
@@ -568,7 +674,6 @@ document.getElementById('btnCopiarAt').onclick = () => {
   if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('Resumo copiado'), () => prompt('Copia o resumo:', t));
   else prompt('Copia o resumo:', t);
 };
-document.getElementById('talao').addEventListener('input', () => { idPendente = null; });
 
 document.getElementById('btnConfirmar').onclick = async () => {
   if (!confirm('Confirmar este atendimento? O stock vai ser atualizado.\n\n' + resumoAt())) return;
@@ -579,11 +684,13 @@ document.getElementById('btnConfirmar').onclick = async () => {
   Object.entries(CARRO.leva).forEach(([id, qtd]) => linhas.push({ id, tipo: 'leva', qtd }));
   Object.entries(CARRO.entrega).forEach(([id, qtd]) => linhas.push({ id, tipo: 'entrega', qtd }));
   try {
-    const r = await api('atendimento', { idAt: idPendente, talao: document.getElementById('talao').value.trim(), linhas });
+    const r = await api('atendimento', { idAt: idPendente, talao: TALAO ? TALAO.canhao : '', linhas });
     atualizarStocks(r.stocks);
-    const s = r.repetido ? null : r.saldo;
     limparAt();
-    toast(r.repetido ? '✔ Já estava gravado.' : '✔ Gravado. ' + (s > 0 ? 'A pagar ' + eur(s) : s < 0 ? 'Crédito ' + eur(-s) : ''));
+    if (r.repetido) toast('✔ Já estava gravado.');
+    else if (r.talao) toast('✔ Gravado. ' + (r.pagar ? 'Paga ' + eur(r.pagar) + ' em dinheiro. ' : 'Nada a pagar. ') +
+      'Talão ' + r.talao.canhao + ' fica com ' + eur(r.talao.saldoFinal) + '.');
+    else toast('✔ Gravado. ' + (r.saldo > 0 ? 'A pagar ' + eur(r.saldo) : r.saldo < 0 ? 'Crédito ' + eur(-r.saldo) + ' (sem talão)' : ''));
     carregarHist();
   } catch (e) {
     toast('Erro: ' + e.message + ' — podes tentar de novo, não fica duplicado.');
@@ -610,12 +717,15 @@ async function carregarHist() {
       const li = document.createElement('li');
       li.innerHTML = '<div class="l1"><span class="' + (anulado ? 'anulado' : '') + '"><b>' + esc(h.data) + '</b> · ' + esc(h.quem) +
         (h.talao ? ' · talão ' + esc(h.talao) : '') + '</span><b class="' + (anulado ? 'anulado' : '') + '">' +
-        (h.saldo > 0 ? 'pagou ' + eur(h.saldo) : h.saldo < 0 ? 'crédito ' + eur(-h.saldo) : '0,00 €') + '</b></div>' +
+        (h.talao && h.pago !== null ? (h.pago ? 'pagou ' + eur(h.pago) : 'pagou 0,00 €')
+          : h.saldo > 0 ? 'pagou ' + eur(h.saldo) : h.saldo < 0 ? 'crédito ' + eur(-h.saldo) : '0,00 €') + '</b></div>' +
+        (h.talao && h.saldoTalao !== null ? '<small>Talão ficou com ' + eur(h.saldoTalao) + '</small>' : '') +
         '<small>' + (h.leva ? '⬆ ' + esc(h.leva) : '') + (h.leva && h.entrega ? '<br>' : '') + (h.entrega ? '⬇ ' + esc(h.entrega) : '') + '</small>' +
         (anulado ? '<small>' + esc(h.estado) + '</small>' : '<button class="link vermelho">Anular</button>');
       const b = li.querySelector('button');
       if (b) b.onclick = async () => {
-        if (!confirm('Anular o atendimento de ' + h.data + '? As peças voltam ao stock como estavam antes.')) return;
+        if (!confirm('Anular o atendimento de ' + h.data + '? As peças voltam ao stock como estavam antes' +
+          (h.talao ? ' e o talão ' + h.talao + ' volta ao saldo que tinha.' : '.'))) return;
         b.disabled = true; b.textContent = 'A anular…';
         try { const r2 = await api('anular', { idAt: h.idAt }); atualizarStocks(r2.stocks); toast('✔ Atendimento anulado'); carregarHist(); desenharAt(); }
         catch (e) { toast('Erro: ' + e.message); b.disabled = false; b.textContent = 'Anular'; }
