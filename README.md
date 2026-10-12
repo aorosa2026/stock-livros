@@ -114,3 +114,4 @@ Pode ser mudada aí a qualquer momento, sem nova implementação.
    - Calculadora: `CALC_URL` no `fardas.html`
 
 Para atualizar o código de um Apps Script **sem** mudar o link: *Gerir implementações → ✏ → Versão: Nova versão*.
+
