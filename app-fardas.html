@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v7</title>
+<title>Stock de Fardas v8</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -58,6 +58,7 @@
   .resMed .n { font-size:2.6rem; font-weight:800; color:#155443; line-height:1.1; }
   .resMed.fora { background:#fff6db; } .resMed.fora .t, .resMed.fora .n { color:#7a5a00; }
   .resMed small { display:block; color:var(--muted); margin-top:4px; }
+  .obsMed { margin-top:10px; padding:8px 10px; border-radius:10px; background:#fff6db; color:#7a5a00; font-weight:700; }
   .comoMedir { background:var(--bg); border-radius:10px; padding:8px 10px; font-size:.88rem; color:var(--muted); margin-top:8px; }
   #pecasMed { list-style:none; padding:0; margin:8px 0 0; }
   #pecasMed li { display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:6px; cursor:pointer; }
@@ -153,7 +154,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v7</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v8</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -997,7 +998,8 @@ function calcularMedida() {
   if (certa) {
     tam = certa.tamanho;
     res.innerHTML = '<div class="resMed"><div class="t">Guardar no tamanho</div><div class="n">' + esc(tam) + '</div>' +
-      '<small>' + esc(med.tipo) + (med.marca ? ' · ' + esc(med.marca) : '') + ' · de ' + cm(certa.de) + ' a ' + cm(certa.ate) + '</small></div>';
+      '<small>' + esc(med.tipo) + (med.marca ? ' · ' + esc(med.marca) : '') + ' · de ' + cm(certa.de) + ' a ' + cm(certa.ate) + '</small>' +
+      (certa.obs ? '<div class="obsMed">⚠ ' + esc(certa.obs) + '</div>' : '') + '</div>';
   } else {
     // Fora da tabela ou num intervalo vazio: indica o mais próximo
     const dist = m => x < m.de ? m.de - x : x - m.ate;
