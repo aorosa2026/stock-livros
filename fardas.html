@@ -15,7 +15,7 @@
      API_URL  → link da Aplicação Web do Apps Script do INVENTÁRIO (termina em /exec)
      CALC_URL → link da calculadora (já preenchido)
      ====================================================================== */
-  const API_URL  = 'https://script.google.com/macros/s/AKfycbzoiwH82foqy3q10BSfMC5RwFfoA2jgQR3VlW0SR7tXEiUcG5EYK8uSYX_6Zb-9KgRzzQ/exec';
+  const API_URL  = 'https://script.google.com/macros/s/AKfycbwal5C4pZ1W9qGiXookw_ELIgd1NuZAjMcYTDFCokfgbiZJIJ4eUK--6Rz30uI0IH-j/exec';
   const CALC_URL = 'https://script.google.com/macros/s/AKfycby52pdKuv-23L7tRdcbFsf6iww5ELnjP7-xSyE5xSwh_GeRq_7ujVrUM-_QMl-VxJE/exec';
 </script>
 <style>
@@ -109,6 +109,7 @@
       <p id="contagem" class="meta"></p>
       <ul id="resultados"></ul>
       <p id="carregar" class="meta">A carregar lista…</p>
+      <p class="meta"><a id="linkQR" target="_blank" rel="noopener">🖨 Imprimir etiquetas QR</a></p>
     </div>
 
     <!-- Separador: Calculadora -->
@@ -192,6 +193,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
   }
 });
 document.getElementById('calcLink').href = CALC_URL;
+document.getElementById('linkQR').href = API_URL + '?action=folhaqr';
 
 /* ---------- Leitura QR em direto ---------- */
 document.getElementById('btnLer').onclick = async () => {
