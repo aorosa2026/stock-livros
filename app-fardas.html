@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v5</title>
+<title>Stock de Fardas v6</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -139,7 +139,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v5</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v6</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -176,6 +176,11 @@
       </div>
       <div id="leitorA" style="margin-top:10px;border-radius:12px;overflow:hidden"></div>
       <input id="pesqA" type="search" placeholder="Ou procura: polo 8, saia 10…" autocomplete="off">
+      <div class="filtro-tit">Categoria</div>
+      <div class="chips" id="fCatA"></div>
+      <div id="blocoSubA" class="hidden"><div class="filtro-tit">Tipo de peça</div><div class="chips" id="fSubA"></div></div>
+      <div id="blocoTamA" class="hidden"><div class="filtro-tit">Tamanho</div><div class="chips" id="fTamA"></div></div>
+      <p id="contA" class="meta"></p>
       <ul id="sugA"></ul>
 
       <div class="card">
@@ -289,7 +294,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
   await pararLeitor();
   document.getElementById('tabInv').classList.toggle('hidden', at);
   document.getElementById('tabAt').classList.toggle('hidden', !at);
-  if (at) { desenharAt(); carregarHist(); } else filtrar();
+  if (at) { desenharFiltrosA(); listarA(); desenharAt(); carregarHist(); } else filtrar();
 });
 document.getElementById('linkQR').href = API_URL + '?action=folhaqr';
 
@@ -393,7 +398,7 @@ function chips(idEl, valores, chave, rotuloTodos) {
     b.textContent = v || rotuloTodos;
     b.onclick = () => {
       filtro[chave] = v;
-      if (chave === 'cat') filtro.sub = '';
+      if (chave === 'cat') filtro.sub = filtro.tam = '';   // muda de categoria → limpa tipo e tamanho
       desenharFiltros(); filtrar();
     };
     el.appendChild(b);
@@ -579,13 +584,48 @@ document.getElementById('scanEnt').onclick = e => iniciarLeitor('leitorA', e.cur
 
 /* Pesquisa no atendimento: cada resultado tem botões Leva / Entrega */
 const pesqA = document.getElementById('pesqA');
-pesqA.addEventListener('input', () => {
-  const ul = document.getElementById('sugA');
-  ul.innerHTML = '';
+/* Filtros do atendimento (iguais aos do Inventário, mas independentes) */
+const filtroA = { cat: '', sub: '', tam: '' };
+function desenharFiltrosA() {
+  const cats = unicos(ARTIGOS.map(a => a.categoria));
+  const doCat = ARTIGOS.filter(a => !filtroA.cat || a.categoria === filtroA.cat);
+  const subs = filtroA.cat ? unicos(doCat.map(a => a.subcategoria)) : [];
+  if (!subs.includes(filtroA.sub)) filtroA.sub = '';
+  const doSub = doCat.filter(a => !filtroA.sub || a.subcategoria === filtroA.sub);
+  const tams = unicos(doSub.map(a => a.tamanho)).sort(ordTam);
+  if (!tams.includes(filtroA.tam)) filtroA.tam = '';
+  chipsA('fCatA', cats, 'cat', 'Todas');
+  chipsA('fSubA', subs, 'sub', 'Todos');
+  chipsA('fTamA', tams, 'tam', 'Todos');
+  document.getElementById('blocoSubA').classList.toggle('hidden', !subs.length);
+  document.getElementById('blocoTamA').classList.toggle('hidden', !tams.length || (!filtroA.cat && !filtroA.sub));
+}
+function chipsA(idEl, valores, chave, rotuloTodos) {
+  const el = document.getElementById(idEl);
+  el.innerHTML = '';
+  [''].concat(valores).forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (filtroA[chave] === v ? ' sel' : '');
+    b.textContent = v || rotuloTodos;
+    b.onclick = () => { filtroA[chave] = v; if (chave === 'cat') filtroA.sub = filtroA.tam = ''; desenharFiltrosA(); listarA(); };
+    el.appendChild(b);
+  });
+}
+
+pesqA.addEventListener('input', listarA);
+function listarA() {
+  const ul = document.getElementById('sugA'), cont = document.getElementById('contA');
+  ul.innerHTML = ''; cont.textContent = '';
   const palavras = semAcentos(pesqA.value.trim()).split(/\s+/).filter(Boolean);
-  if (!palavras.length) return;
-  ARTIGOS.filter(a => palavras.every(p => semAcentos([a.id, a.categoria, a.subcategoria, a.tamanho, a.descricao].join(' ')).includes(p)))
-    .slice(0, 10).forEach(a => {
+  if (!palavras.length && !filtroA.cat && !filtroA.sub && !filtroA.tam) return;
+  const res = ARTIGOS.filter(a =>
+    (!filtroA.cat || a.categoria === filtroA.cat) &&
+    (!filtroA.sub || a.subcategoria === filtroA.sub) &&
+    (!filtroA.tam || a.tamanho === filtroA.tam) &&
+    palavras.every(p => semAcentos([a.id, a.categoria, a.subcategoria, a.tamanho, a.descricao].join(' ')).includes(p)))
+    .sort((x, y) => x.subcategoria.localeCompare(y.subcategoria, 'pt') || ordTam(x.tamanho, y.tamanho));
+  cont.textContent = res.length + (res.length === 1 ? ' peça' : ' peças') + (res.length > 60 ? ' (a mostrar 60 — escolhe um tipo ou tamanho)' : '');
+  res.slice(0, 60).forEach(a => {
       const li = document.createElement('li');
       li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
         (precoEst(a, 'Boa') != null ? eur(precoEst(a, 'Boa')) : 'sem preço') + ' · stock ' + a.stock +
@@ -597,8 +637,8 @@ pesqA.addEventListener('input', () => {
         li.appendChild(b);
       });
       ul.appendChild(li);
-    });
-});
+  });
+}
 
 /* ---------- Talão (mesmas regras da app de descontos) ---------- */
 let TALAO = null, TALOES = [];
@@ -755,7 +795,7 @@ function resumoAt() {
 
 function limparAt() {
   CARRO.leva = {}; CARRO.entrega = {}; idPendente = null;
-  pesqA.value = ''; document.getElementById('sugA').innerHTML = '';
+  pesqA.value = ''; filtroA.cat = filtroA.sub = filtroA.tam = ''; desenharFiltrosA(); listarA();
   tirarTalao();
 }
 document.getElementById('btnLimparAt').onclick = () => {
