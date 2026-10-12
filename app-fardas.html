@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v8</title>
+<title>Stock de Fardas v9</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -58,6 +58,15 @@
   .resMed .n { font-size:2.6rem; font-weight:800; color:#155443; line-height:1.1; }
   .resMed.fora { background:#fff6db; } .resMed.fora .t, .resMed.fora .n { color:#7a5a00; }
   .resMed small { display:block; color:var(--muted); margin-top:4px; }
+  .tipoGrp { font-size:.78rem; color:var(--muted); margin:8px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
+  .chip.addEnt { border-color:var(--acc); color:#155443; }
+  .espTag { display:inline-block; font-size:.75rem; background:#fff6db; color:#7a5a00; border-radius:999px; padding:1px 8px; margin-left:4px; }
+  #listaEsp { list-style:none; padding:0; margin:0; }
+  #listaEsp > li { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  #listaEsp > li.aberto { border:2px solid var(--acc); }
+  #listaEsp .topo { display:flex; justify-content:space-between; gap:8px; cursor:pointer; }
+  #listaEsp small { display:block; color:var(--muted); }
+  #listaEsp .painel { margin-top:10px; }
   .obsMed { margin-top:10px; padding:8px 10px; border-radius:10px; background:#fff6db; color:#7a5a00; font-weight:700; }
   .comoMedir { background:var(--bg); border-radius:10px; padding:8px 10px; font-size:.88rem; color:var(--muted); margin-top:8px; }
   #pecasMed { list-style:none; padding:0; margin:8px 0 0; }
@@ -154,12 +163,13 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v8</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v9</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
       <button data-tab="at">🧾 Atendimento</button>
       <button data-tab="med">📏 Medir</button>
+      <button data-tab="esp">⏳ Espera <span id="nEsp"></span></button>
     </nav>
 
     <!-- Separador: Inventário -->
@@ -184,6 +194,13 @@
       <p class="meta"><a id="linkQR" target="_blank" rel="noopener">🖨 Imprimir etiquetas QR</a></p>
     </div>
 
+    <!-- Separador: Espera -->
+    <div id="tabEsp" class="hidden">
+      <p class="meta" style="margin-top:0">Peças entregues no atendimento que ainda não têm tamanho. Escolhe ou mede o tamanho e carrega em Inventariar: passam para o stock.</p>
+      <ul id="listaEsp"><li class="meta">—</li></ul>
+      <button id="btnEspAtual" class="link">atualizar</button>
+    </div>
+
     <!-- Separador: Medir -->
     <div id="tabMed" class="hidden">
       <div class="card" style="margin-top:0">
@@ -206,11 +223,10 @@
     <!-- Separador: Atendimento -->
     <div id="tabAt" class="hidden">
       <div class="acoes" style="margin-top:0">
-        <button id="scanLeva" class="btn btn-leva">📷 Leva</button>
-        <button id="scanEnt" class="btn btn-acc">📷 Entrega</button>
+        <button id="scanLeva" class="btn btn-leva" style="grid-column:1 / -1">📷 Ler QR da peça que leva</button>
       </div>
       <div id="leitorA" style="margin-top:10px;border-radius:12px;overflow:hidden"></div>
-      <input id="pesqA" type="search" placeholder="Ou procura: polo 8, saia 10…" autocomplete="off">
+      <input id="pesqA" type="search" placeholder="Leva: procura polo 8, saia 10…" autocomplete="off">
       <div class="filtro-tit">Categoria</div>
       <div class="chips" id="fCatA"></div>
       <div id="blocoSubA" class="hidden"><div class="filtro-tit">Tipo de peça</div><div class="chips" id="fSubA"></div></div>
@@ -222,7 +238,10 @@
         <div class="sec-tit leva">⬆ Leva <small id="nLeva"></small></div>
         <ul id="lLeva" class="linhas"></ul>
         <div class="sec-tit ent">⬇ Entrega <small id="nEnt"></small></div>
+        <p class="meta" style="margin:0 0 4px">Sem tamanho: vai para a sala de espera ⏳ e é inventariada depois.</p>
         <ul id="lEnt" class="linhas"></ul>
+        <button id="btnAddEnt" class="btn" style="background:var(--ok);color:#155443;width:100%">+ Entrega</button>
+        <div id="pickEnt" class="hidden" style="margin:8px 0 14px"></div>
 
         <div class="sec-tit">🎟 Talão <small>opcional</small></div>
         <div class="talao-box">
@@ -306,6 +325,7 @@ async function entrar(automatico) {
     AVISO_PRECOS = d.avisoPrecos || '';
     if (d.estados && d.estados.length) ESTADOS = d.estados;
     MEDIDAS = d.medidas || [];
+    contarEspera();
     ARTIGOS.forEach(normalizarArtigo);
     document.getElementById('carregar').textContent = ARTIGOS.length + ' artigos na lista · ' + nome;
     document.getElementById('ecraEntrada').classList.add('hidden');
@@ -325,13 +345,14 @@ async function entrar(automatico) {
 if (lerGuardado('fardas_pw')) entrar(true);
 
 /* ---------- Separadores ---------- */
-const SEPARADORES = { inv: 'tabInv', at: 'tabAt', med: 'tabMed' };
+const SEPARADORES = { inv: 'tabInv', at: 'tabAt', med: 'tabMed', esp: 'tabEsp' };
 async function irPara(tab) {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('sel', x.dataset.tab === tab));
   await pararLeitor();
   Object.entries(SEPARADORES).forEach(([t, id]) => document.getElementById(id).classList.toggle('hidden', t !== tab));
   if (tab === 'at') { desenharFiltrosA(); listarA(); desenharAt(); carregarHist(); }
   else if (tab === 'med') desenharMedir();
+  else if (tab === 'esp') carregarEspera();
   else filtrar();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => irPara(b.dataset.tab));
@@ -620,8 +641,43 @@ function estadoPorDefeito(tipo, a) {
   return e ? e.chave : 'Boa';
 }
 function disponivel(a, est) {
-  return (a.est[est] || 0) + (CARRO.entrega[chaveC(a.id, est)] || 0) - (CARRO.leva[chaveC(a.id, est)] || 0);
+  return (a.est[est] || 0) - (CARRO.leva[chaveC(a.id, est)] || 0);
 }
+
+/* Entregas: só tipo de peça + estado (sem tamanho). CARRO.entrega = { 'Tipo|Estado': qtd } */
+function tiposDePeca() {
+  const m = {};
+  ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco }; });
+  return Object.values(m).sort((x, y) => x.grupo.localeCompare(y.grupo, 'pt') || x.tipo.localeCompare(y.tipo, 'pt'));
+}
+const tipoInfo = sub => tiposDePeca().find(t => t.tipo === sub);
+const precoTipo = (sub, est) => { const t = tipoInfo(sub); return t ? (t.precos ? t.precos[est] : t.preco) : null; };
+function juntarEnt(sub, n, est) {
+  est = est || 'Boa';
+  const k = chaveC(sub, est);
+  CARRO.entrega[k] = Math.max(0, (CARRO.entrega[k] || 0) + (n || 1));
+  if (!CARRO.entrega[k]) delete CARRO.entrega[k];
+  idPendente = null;
+  desenharAt();
+}
+document.getElementById('btnAddEnt').onclick = () => {
+  const box = document.getElementById('pickEnt');
+  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+  box.innerHTML = '';
+  let grp = '';
+  tiposDePeca().forEach(t => {
+    if (t.grupo !== grp) {
+      grp = t.grupo;
+      const h = document.createElement('div'); h.className = 'tipoGrp'; h.textContent = grp; box.appendChild(h);
+      box.appendChild(Object.assign(document.createElement('div'), { className: 'chips' }));
+    }
+    const b = document.createElement('button');
+    b.className = 'chip addEnt'; b.textContent = '+ ' + t.tipo;
+    b.onclick = () => { juntarEnt(t.tipo, 1); toast('⬇ Entrega: ' + t.tipo); };
+    box.lastChild.appendChild(b);
+  });
+  box.classList.remove('hidden');
+};
 
 function juntar(tipo, a, n, est) {
   if (!a) return;
@@ -643,8 +699,6 @@ function mudarEstadoLinha(tipo, k, novo) {
 
 document.getElementById('scanLeva').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
   const a = artigoDoQR(t); if (a) { juntar('leva', a); toast('⬆ Leva: ' + nomeArtigo(a) + ' ' + a.tamanho); } });
-document.getElementById('scanEnt').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
-  const a = artigoDoQR(t); if (a) { juntar('entrega', a); toast('⬇ Entrega: ' + nomeArtigo(a) + ' ' + a.tamanho); } });
 
 /* Pesquisa no atendimento: cada resultado tem botões Leva / Entrega */
 const pesqA = document.getElementById('pesqA');
@@ -694,7 +748,7 @@ function listarA() {
       li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
         (precoEst(a, 'Boa') != null ? eur(precoEst(a, 'Boa')) : 'sem preço') + ' · stock ' + a.stock +
         (a.stock !== (a.est.Boa || 0) ? ' (' + (a.est.Boa || 0) + ' boas)' : '') + '</small></div>';
-      [['leva', '⬆ Leva'], ['entrega', '⬇ Entrega']].forEach(([t, r]) => {
+      [['leva', '⬆ Leva']].forEach(([t, r]) => {
         const b = document.createElement('button');
         b.className = 'pq ' + (t === 'leva' ? 'leva' : 'ent'); b.textContent = r;
         b.onclick = () => { juntar(t, a); toast((t === 'leva' ? '⬆ Leva: ' : '⬇ Entrega: ') + nomeArtigo(a) + ' ' + a.tamanho); };
@@ -776,19 +830,41 @@ function contas() {
     const [id, est] = partes(k), a = art(id); if (!a) return;
     const p = precoEst(a, est);
     nL += q; tL += q * (p || 0); if (p == null) semPreco++;
-    if (q > (a.est[est] || 0) + (CARRO.entrega[k] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est).toLowerCase() + ')');
+    if (q > (a.est[est] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est).toLowerCase() + ')');
   });
   Object.entries(CARRO.entrega).forEach(([k, q]) => {
-    const [id, est] = partes(k), a = art(id); if (!a) return;
-    const p = precoEst(a, est);
+    const [sub, est] = partes(k), p = precoTipo(sub, est);
     nE += q; tE += q * (p || 0); if (p == null) semPreco++;
   });
   tL = r2(tL); tE = r2(tE);
   return { tL, tE, nL, nE, saldo: Math.round((tL - tE) * 100) / 100, semPreco, falta };
 }
 
+function desenharEntregas() {
+  const ul = document.getElementById('lEnt');
+  ul.innerHTML = '';
+  const ks = Object.keys(CARRO.entrega);
+  if (!ks.length) { ul.innerHTML = '<li class="vaziaL">Nenhuma peça.</li>'; return; }
+  ks.forEach(k => {
+    const [sub, est] = partes(k), q = CARRO.entrega[k], p = precoTipo(sub, est);
+    const opcoes = ESTADOS.map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
+      (precoTipo(sub, e.chave) != null ? ' · ' + eur(precoTipo(sub, e.chave)) : '') + '</option>').join('');
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="nm">' + esc(sub) + '<span class="espTag">⏳ sem tamanho</span>' +
+      '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
+      '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small></div>' +
+      '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
+      '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+    li.querySelector('.estSel').onchange = e => mudarEstadoLinha('entrega', k, e.target.value);
+    li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntarEnt(sub, +b.dataset.d, est));
+    li.querySelector('.tira').onclick = () => juntarEnt(sub, -q, est);
+    ul.appendChild(li);
+  });
+}
+
 function desenharAt() {
-  ['leva', 'entrega'].forEach(tipo => {
+  desenharEntregas();
+  ['leva'].forEach(tipo => {
     const ul = document.getElementById(tipo === 'leva' ? 'lLeva' : 'lEnt');
     ul.innerHTML = '';
     const ids = Object.keys(CARRO[tipo]);
@@ -796,7 +872,7 @@ function desenharAt() {
     ids.forEach(k => {
       const [id, est] = partes(k), a = art(id); if (!a) return;
       const q = CARRO[tipo][k], p = precoEst(a, est);
-      const semStock = tipo === 'leva' && q > (a.est[est] || 0) + (CARRO.entrega[k] || 0);
+      const semStock = tipo === 'leva' && q > (a.est[est] || 0);
       const opcoes = ESTADOS.map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
         esc(e.nome) + (tipo === 'leva' ? ' (' + (a.est[e.chave] || 0) + ')' : '') +
         (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
@@ -846,7 +922,8 @@ function resumoAt() {
     return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est).toLowerCase() + ')' : '') +
       ' = ' + eur(q * (precoEst(a, est) || 0)); };
   Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
-  Object.entries(CARRO.entrega).forEach(([k, q]) => l.push(linha('Entrega', k, q)));
+  Object.entries(CARRO.entrega).forEach(([k, q]) => { const [sub, est] = partes(k);
+    l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est).toLowerCase() : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
   const ct = contasTalao(c);
   if (ct) {
     l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
@@ -859,6 +936,7 @@ function resumoAt() {
 
 function limparAt() {
   CARRO.leva = {}; CARRO.entrega = {}; idPendente = null;
+  document.getElementById('pickEnt').classList.add('hidden');
   pesqA.value = ''; filtroA.cat = filtroA.sub = filtroA.tam = ''; desenharFiltrosA(); listarA();
   tirarTalao();
 }
@@ -879,11 +957,12 @@ document.getElementById('btnConfirmar').onclick = async () => {
   if (!idPendente) idPendente = 'A' + new Date().toISOString().replace(/\D/g, '').slice(2, 14) + '-' + Math.random().toString(36).slice(2, 5);
   const linhas = [];
   Object.entries(CARRO.leva).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'leva', qtd, estado }); });
-  Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'entrega', qtd, estado }); });
+  Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [sub, estado] = partes(k); linhas.push({ sub, tipo: 'espera', qtd, estado }); });
   try {
     const r = await api('atendimento', { idAt: idPendente, talao: TALAO ? TALAO.canhao : '', linhas });
     atualizarStocks(r.stocks);
     limparAt();
+    contarEspera();
     if (r.repetido) toast('✔ Já estava gravado.');
     else if (r.talao) toast('✔ Gravado. ' + (r.pagar ? 'Paga ' + eur(r.pagar) + ' em dinheiro. ' : 'Nada a pagar. ') +
       'Talão ' + r.talao.canhao + ' fica com ' + eur(r.talao.saldoFinal) + '.');
@@ -934,6 +1013,119 @@ async function carregarHist() {
   } catch (e) { ul.innerHTML = '<li class="meta">Não consegui carregar: ' + esc(e.message) + '</li>'; }
 }
 document.getElementById('btnHist').onclick = carregarHist;
+
+/* =====================================================================
+   ESPERA: peças entregues sem tamanho → escolher/medir o tamanho → stock
+   ===================================================================== */
+let ESPERA = [], espAberta = null;
+async function contarEspera() {
+  try { const r = await api('espera'); ESPERA = r.espera || []; } catch (e) { return; }
+  document.getElementById('nEsp').textContent = ESPERA.length ? '(' + ESPERA.length + ')' : '';
+}
+async function carregarEspera() {
+  const ul = document.getElementById('listaEsp');
+  ul.innerHTML = '<li class="meta">A carregar…</li>';
+  await contarEspera();
+  desenharEspera();
+}
+document.getElementById('btnEspAtual').onclick = carregarEspera;
+
+// Tipo da folha Medidas que corresponde a este tipo de peça (ex.: "Polo" para "Polo verão")
+function tipoMedidaPara(sub) {
+  const s = semAcentos(sub);
+  return unicos(MEDIDAS.map(m => m.tipo)).find(t => { const x = semAcentos(t); return x === s || s.includes(x) || x.includes(s); }) || '';
+}
+function tamanhoPorMedida(tipo, marca, x) {
+  const ls = MEDIDAS.filter(m => m.tipo === tipo && (m.marca || '') === (marca || '')).sort((a, b) => a.de - b.de);
+  if (!ls.length) return null;
+  const certa = ls.find(m => x >= m.de && x <= m.ate);
+  if (certa) return { tam: certa.tamanho, obs: certa.obs, fora: false };
+  const dist = m => x < m.de ? m.de - x : x - m.ate;
+  return { tam: ls.slice().sort((a, b) => dist(a) - dist(b))[0].tamanho, obs: '', fora: true };
+}
+
+function desenharEspera() {
+  const ul = document.getElementById('listaEsp');
+  ul.innerHTML = '';
+  if (!ESPERA.length) { ul.innerHTML = '<li class="meta">Não há peças à espera. 🎉</li>'; return; }
+  ESPERA.forEach(e => {
+    const li = document.createElement('li');
+    if (espAberta === e.idE) li.className = 'aberto';
+    li.innerHTML = '<div class="topo"><div><b>' + esc(e.tipo) + '</b> · ' + esc(nomeEst(e.estado).toLowerCase()) +
+      '<small>' + esc(e.data) + (e.talao ? ' · talão ' + esc(e.talao) : '') + (e.quem ? ' · ' + esc(e.quem) : '') + '</small></div>' +
+      '<span class="meta">' + (espAberta === e.idE ? '▴' : '▾') + '</span></div>';
+    li.querySelector('.topo').onclick = () => { espAberta = espAberta === e.idE ? null : e.idE; desenharEspera(); };
+    if (espAberta === e.idE) li.appendChild(painelEspera(e));
+    ul.appendChild(li);
+  });
+}
+
+function painelEspera(e) {
+  const box = document.createElement('div');
+  box.className = 'painel';
+  const tamanhos = unicos(ARTIGOS.filter(a => a.subcategoria === e.tipo).map(a => a.tamanho)).sort(ordTam);
+  const tMed = tipoMedidaPara(e.tipo);
+  const marcas = tMed ? unicos(MEDIDAS.filter(m => m.tipo === tMed).map(m => m.marca)) : [];
+  let marca = marcas.length ? marcas[0] : '', escolhido = '';
+
+  box.innerHTML =
+    (tMed ? '<div class="filtro-tit">Medir (' + esc(tMed) + ')</div>' +
+      (marcas.length ? '<div class="chips mMarca"></div>' : '') +
+      '<input class="mCm" type="text" inputmode="decimal" placeholder="comprimento em cm" style="margin-top:6px">' +
+      '<div class="mRes meta" style="margin-top:4px"></div>' : '') +
+    '<div class="filtro-tit">Tamanho</div><div class="chips mTam"></div>' +
+    '<button class="btn btn-acc mOk" style="margin-top:10px" disabled>Escolhe o tamanho</button>';
+
+  const ok = box.querySelector('.mOk');
+  const pintar = () => {
+    box.querySelectorAll('.mTam .chip').forEach(c => c.classList.toggle('sel', c.textContent === escolhido));
+    ok.disabled = !escolhido;
+    ok.textContent = escolhido ? '✔ Inventariar no tamanho ' + escolhido : 'Escolhe o tamanho';
+  };
+  const zt = box.querySelector('.mTam');
+  if (!tamanhos.length) zt.innerHTML = '<span class="meta">Não há linhas de ' + esc(e.tipo) + ' no Inventario.</span>';
+  tamanhos.forEach(t => {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = t;
+    b.onclick = () => { escolhido = t; pintar(); };
+    zt.appendChild(b);
+  });
+  if (tMed) {
+    const zm = box.querySelector('.mMarca');
+    const desenharMarcas = () => {
+      if (!zm) return;
+      zm.innerHTML = '';
+      marcas.forEach(m => {
+        const b = document.createElement('button'); b.className = 'chip' + (m === marca ? ' sel' : ''); b.textContent = m || 'Outra / não sei';
+        b.onclick = () => { marca = m; desenharMarcas(); medir(); };
+        zm.appendChild(b);
+      });
+    };
+    const medir = () => {
+      const x = parseFloat(box.querySelector('.mCm').value.replace(',', '.'));
+      const res = box.querySelector('.mRes');
+      if (isNaN(x)) { res.textContent = ''; return; }
+      const r = tamanhoPorMedida(tMed, marca, x);
+      if (!r) { res.textContent = 'Sem medidas para esta escolha.'; return; }
+      res.innerHTML = (r.fora ? '⚠ Fora da tabela — mais próximo: ' : '📏 Tamanho ') + '<b>' + esc(r.tam) + '</b>' + (r.obs ? ' · ⚠ ' + esc(r.obs) : '');
+      if (tamanhos.includes(r.tam)) { escolhido = r.tam; pintar(); }
+      else res.innerHTML += ' — não há linha deste tamanho no Inventario';
+    };
+    desenharMarcas();
+    box.querySelector('.mCm').addEventListener('input', medir);
+  }
+  ok.onclick = async () => {
+    ok.disabled = true; ok.textContent = 'A gravar…';
+    try {
+      const r = await api('inventariar', { idE: e.idE, tamanho: escolhido });
+      atualizarStocks(r.stocks);
+      ESPERA = ESPERA.filter(x => x.idE !== e.idE); espAberta = null;
+      document.getElementById('nEsp').textContent = ESPERA.length ? '(' + ESPERA.length + ')' : '';
+      toast('✔ ' + e.tipo + ' ' + escolhido + ' (' + nomeEst(e.estado).toLowerCase() + ') → stock (' + r.codigo + ')');
+      desenharEspera();
+    } catch (err) { toast('Erro: ' + err.message); pintar(); }
+  };
+  return box;
+}
 
 /* =====================================================================
    MEDIR: tipo (+ marca nos bibes) + comprimento → tamanho, pela folha Medidas
