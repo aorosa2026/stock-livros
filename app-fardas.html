@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v11</title>
+<title>Stock de Fardas v13</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -163,7 +163,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v11</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v13</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -554,7 +554,6 @@ function mostrar(a) {
     '<div class="meta">' + esc([a.categoria, a.subcategoria, 'código ' + a.id].filter(Boolean).join(' · ')) + '</div>' +
     '<div class="grande">Em stock: <b id="stk">' + a.stock + '</b></div>' +
     '<div class="filtro-tit">Estado — escolhe para a entrada/saída</div><div class="estados" id="estados"></div>' +
-    '<div id="zonaArranjo"></div>' +
     '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="meta">peça(s)</span></div>' +
     '<div class="filtro-tit">Motivo (opcional)</div><div class="chips" id="motivos"></div>' +
     '<div class="acoes"><button id="btnSai" class="btn btn-sai">− Saída</button><button id="btnEnt" class="btn btn-acc">+ Entrada</button></div>';
@@ -595,23 +594,7 @@ function desenharEstadosFicha() {
     el.appendChild(b);
   });
   document.getElementById('stk').textContent = a.stock;
-  // Peças à espera de arranjo: botão para as passar a "rota arranjada"
-  const z = document.getElementById('zonaArranjo'), nA = a.est['A arranjar'] || 0;
-  z.innerHTML = '';
-  if (nA && ESTADOS.some(e => e.chave === 'Arranjada')) {
-    const b = document.createElement('button');
-    b.className = 'btn btn-arranjo';
-    b.textContent = '🧵 Já arranjei 1 → passa a "' + nomeEst('Arranjada') + '" (' + nA + ' por arranjar)';
-    b.onclick = async () => {
-      b.disabled = true;
-      try {
-        const r = await api('mudarEstado', { id: a.id, de: 'A arranjar', para: 'Arranjada', qtd: 1 });
-        atualizarStocks(r.stocks); desenharEstadosFicha(); filtrar();
-        toast('✔ 1 peça passou para ' + nomeEst('Arranjada').toLowerCase());
-      } catch (e) { toast('Erro: ' + e.message); b.disabled = false; }
-    };
-    z.appendChild(b);
-  }
+
 }
 
 async function movimentar(sinal) {
