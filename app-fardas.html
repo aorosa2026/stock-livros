@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v13</title>
+<title>Stock de Fardas v14</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -163,7 +163,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v13</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v14</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -607,7 +607,7 @@ async function movimentar(sinal) {
     if (r.stocks) atualizarStocks(r.stocks); else { atual.stock = r.stock; atual.est = { Boa: r.stock }; normalizarArtigo(atual); }
     desenharEstadosFicha();
     filtrar();
-    toast('✔ ' + (sinal > 0 ? '+' : '−') + qtd + ' · ' + nomeArtigo(atual) + ' ' + atual.tamanho + ' (' + nomeEst(estSel).toLowerCase() + ') → stock ' + atual.stock);
+    toast('✔ ' + (sinal > 0 ? '+' : '−') + qtd + ' · ' + nomeArtigo(atual) + ' ' + atual.tamanho + ' (' + nomeEst(estSel) + ') → stock ' + atual.stock);
   } catch (e) {
     toast('Erro: ' + e.message);
   } finally {
@@ -828,7 +828,7 @@ function contas() {
     const [id, est] = partes(k), a = art(id); if (!a) return;
     const p = precoEst(a, est);
     nL += q; tL += q * (p || 0); if (p == null) semPreco++;
-    if (q > (a.est[est] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est).toLowerCase() + ')');
+    if (q > (a.est[est] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est) + ')');
   });
   Object.entries(CARRO.entrega).forEach(([k, q]) => {
     const [sub, est] = partes(k), p = precoTipo(sub, est);
@@ -917,11 +917,11 @@ function desenharAt() {
 function resumoAt() {
   const c = contas(), l = [];
   const linha = (t, k, q) => { const [id, est] = partes(k), a = art(id);
-    return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est).toLowerCase() + ')' : '') +
+    return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est) + ')' : '') +
       ' = ' + eur(q * (precoEst(a, est) || 0)); };
   Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
   Object.entries(CARRO.entrega).forEach(([k, q]) => { const [sub, est] = partes(k);
-    l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est).toLowerCase() : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
+    l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est) : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
   const ct = contasTalao(c);
   if (ct) {
     l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
@@ -1049,7 +1049,7 @@ function desenharEspera() {
   ESPERA.forEach(e => {
     const li = document.createElement('li');
     if (espAberta === e.idE) li.className = 'aberto';
-    li.innerHTML = '<div class="topo"><div><b>' + esc(e.tipo) + '</b> · ' + esc(nomeEst(e.estado).toLowerCase()) +
+    li.innerHTML = '<div class="topo"><div><b>' + esc(e.tipo) + '</b> · ' + esc(nomeEst(e.estado)) +
       '<small>' + esc(e.data) + (e.talao ? ' · talão ' + esc(e.talao) : '') + (e.quem ? ' · ' + esc(e.quem) : '') + '</small></div>' +
       '<span class="meta">' + (espAberta === e.idE ? '▴' : '▾') + '</span></div>';
     li.querySelector('.topo').onclick = () => { espAberta = espAberta === e.idE ? null : e.idE; desenharEspera(); };
@@ -1135,7 +1135,7 @@ function painelEspera(e) {
   outro.addEventListener('input', pintarMot);
   bDesc.onclick = async () => {
     const final = motivoD === 'Outro' ? outro.value.trim() : motivoD;
-    if (!confirm('Esta peça (' + e.tipo + ', ' + nomeEst(e.estado).toLowerCase() + ') não vai entrar no stock.\nMotivo: ' + final +
+    if (!confirm('Esta peça (' + e.tipo + ', ' + nomeEst(e.estado) + ') não vai entrar no stock.\nMotivo: ' + final +
       '\n\nO crédito dado no atendimento não muda.')) return;
     bDesc.disabled = true; bDesc.textContent = 'A gravar…';
     try {
@@ -1154,7 +1154,7 @@ function painelEspera(e) {
       atualizarStocks(r.stocks);
       ESPERA = ESPERA.filter(x => x.idE !== e.idE); espAberta = null;
       document.getElementById('nEsp').textContent = ESPERA.length ? '(' + ESPERA.length + ')' : '';
-      toast('✔ ' + e.tipo + ' ' + escolhido + ' (' + nomeEst(e.estado).toLowerCase() + ') → stock (' + r.codigo + ')');
+      toast('✔ ' + e.tipo + ' ' + escolhido + ' (' + nomeEst(e.estado) + ') → stock (' + r.codigo + ')');
       desenharEspera();
     } catch (err) { toast('Erro: ' + err.message); pintar(); }
   };
