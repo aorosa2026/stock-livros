@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v14</title>
+<title>Stock de Fardas v16</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -163,7 +163,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v14</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v16</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -243,6 +243,9 @@
         <button id="btnAddEnt" class="btn" style="background:var(--ok);color:#155443;width:100%">+ Entrega</button>
         <div id="pickEnt" class="hidden" style="margin:8px 0 14px"></div>
 
+        <div class="sec-tit" style="margin-top:14px">📚 Livros PNL / EMRC <small id="nLiv"></small></div>
+        <ul id="lLiv" class="linhas"></ul>
+
         <div class="sec-tit">🎟 Talão <small>opcional</small></div>
         <div class="talao-box">
           <div id="talaoEsc" class="hidden"></div>
@@ -279,6 +282,8 @@
 
 <script>
 let MEDIDAS = [];
+let LIVROS = [{ sub: 'Livro', preco: 3 }];
+const CARRO_LIV = { leva: {}, entrega: {} };   // { 'Livro': 2 }
 let ESTADOS = [{ chave: 'Boa', nome: 'Boa (sem arranjos)', pct: 1 }], estSel = 'Boa';
 let ARTIGOS = [], scanner = null, scanBtn = null, scanTxt = '', atual = null, qtd = 1, motivo = '', AVISO_PRECOS = '';
 const filtro = { cat: '', sub: '', tam: [] };   // tam: vários tamanhos ao mesmo tempo (ex.: 8 e 10)
@@ -325,6 +330,7 @@ async function entrar(automatico) {
     AVISO_PRECOS = d.avisoPrecos || '';
     if (d.estados && d.estados.length) ESTADOS = d.estados;
     MEDIDAS = d.medidas || [];
+    LIVROS = d.livros || LIVROS;
     contarEspera();
     ARTIGOS.forEach(normalizarArtigo);
     document.getElementById('carregar').textContent = ARTIGOS.length + ' artigos na lista · ' + nome;
@@ -834,8 +840,35 @@ function contas() {
     const [sub, est] = partes(k), p = precoTipo(sub, est);
     nE += q; tE += q * (p || 0); if (p == null) semPreco++;
   });
+  let nLv = 0;
+  LIVROS.forEach(lv => {
+    const ql = CARRO_LIV.leva[lv.sub] || 0, qe = CARRO_LIV.entrega[lv.sub] || 0;
+    tL += ql * lv.preco; tE += qe * lv.preco; nLv += ql + qe;
+  });
   tL = r2(tL); tE = r2(tE);
-  return { tL, tE, nL, nE, saldo: Math.round((tL - tE) * 100) / 100, semPreco, falta };
+  return { tL, tE, nL, nE, nLv, saldo: Math.round((tL - tE) * 100) / 100, semPreco, falta };
+}
+
+function desenharLivros() {
+  const ul = document.getElementById('lLiv');
+  ul.innerHTML = '';
+  let n = 0;
+  LIVROS.forEach(lv => {
+    [['leva', '⬆ Leva'], ['entrega', '⬇ Entrega']].forEach(([dir, rot]) => {
+      const q = CARRO_LIV[dir][lv.sub] || 0; n += q;
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="nm"><b>' + rot + '</b><small>' + eur(lv.preco) + ' / livro</small></div>' +
+        '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
+        '<div class="sub">' + eur(q * lv.preco) + '</div>';
+      li.querySelectorAll('.mini button').forEach(b => b.onclick = () => {
+        CARRO_LIV[dir][lv.sub] = Math.max(0, q + +b.dataset.d);
+        if (!CARRO_LIV[dir][lv.sub]) delete CARRO_LIV[dir][lv.sub];
+        idPendente = null; desenharAt();
+      });
+      ul.appendChild(li);
+    });
+  });
+  document.getElementById('nLiv').textContent = n ? n + (n === 1 ? ' livro' : ' livros') : eur(LIVROS[0].preco) + ' cada';
 }
 
 function desenharEntregas() {
@@ -862,6 +895,7 @@ function desenharEntregas() {
 
 function desenharAt() {
   desenharEntregas();
+  desenharLivros();
   ['leva'].forEach(tipo => {
     const ul = document.getElementById(tipo === 'leva' ? 'lLeva' : 'lEnt');
     ul.innerHTML = '';
@@ -911,7 +945,7 @@ function desenharAt() {
   if (c.falta.length) avisos.push('Não há stock suficiente de: ' + c.falta.join(', ') + '.');
   const av = document.getElementById('avisoAt');
   av.textContent = avisos.join(' '); av.classList.toggle('hidden', !avisos.length);
-  document.getElementById('btnConfirmar').disabled = !(c.nL + c.nE) || c.falta.length > 0;
+  document.getElementById('btnConfirmar').disabled = !(c.nL + c.nE + c.nLv) || c.falta.length > 0;
 }
 
 function resumoAt() {
@@ -922,6 +956,10 @@ function resumoAt() {
   Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
   Object.entries(CARRO.entrega).forEach(([k, q]) => { const [sub, est] = partes(k);
     l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est) : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
+  LIVROS.forEach(lv => {
+    ['leva', 'entrega'].forEach(dir => { const q = CARRO_LIV[dir][lv.sub];
+      if (q) l.push((dir === 'leva' ? 'Leva ' : 'Entrega ') + q + '× livro = ' + eur(q * lv.preco)); });
+  });
   const ct = contasTalao(c);
   if (ct) {
     l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
@@ -933,7 +971,7 @@ function resumoAt() {
 }
 
 function limparAt() {
-  CARRO.leva = {}; CARRO.entrega = {}; idPendente = null;
+  CARRO.leva = {}; CARRO.entrega = {}; CARRO_LIV.leva = {}; CARRO_LIV.entrega = {}; idPendente = null;
   document.getElementById('pickEnt').classList.add('hidden');
   pesqA.value = ''; filtroA.cat = filtroA.sub = ''; filtroA.tam = []; desenharFiltrosA(); listarA();
   tirarTalao();
@@ -956,6 +994,7 @@ document.getElementById('btnConfirmar').onclick = async () => {
   const linhas = [];
   Object.entries(CARRO.leva).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'leva', qtd, estado }); });
   Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [sub, estado] = partes(k); linhas.push({ sub, tipo: 'espera', qtd, estado }); });
+  ['leva', 'entrega'].forEach(dir => Object.entries(CARRO_LIV[dir]).forEach(([sub, qtd]) => linhas.push({ tipo: 'livro', sub, dir, qtd })));
   try {
     const r = await api('atendimento', { idAt: idPendente, talao: TALAO ? TALAO.canhao : '', linhas });
     atualizarStocks(r.stocks);
