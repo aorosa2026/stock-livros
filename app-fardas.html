@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v16</title>
+<title>Stock de Fardas v17</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -67,6 +67,14 @@
   #listaEsp .topo { display:flex; justify-content:space-between; gap:8px; cursor:pointer; }
   #listaEsp small { display:block; color:var(--muted); }
   #listaEsp .painel { margin-top:10px; }
+  .tabMedidas { width:100%; border-collapse:collapse; font-size:.9rem; margin:4px 0 14px; background:#fff; }
+  .tabMedidas th, .tabMedidas td { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+  .tabMedidas th { background:var(--bg); font-weight:600; }
+  .tabMedidas td.n { text-align:right; white-space:nowrap; }
+  .tabMedidas td.t { font-weight:700; }
+  .grpMed { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-top:10px; }
+  .grpMed b { font-size:.95rem; } .grpMed span { font-size:.8rem; color:var(--muted); }
+  .grpMed.atual b { color:var(--acc); }
   .obsMed { margin-top:10px; padding:8px 10px; border-radius:10px; background:#fff6db; color:#7a5a00; font-weight:700; }
   .comoMedir { background:var(--bg); border-radius:10px; padding:8px 10px; font-size:.88rem; color:var(--muted); margin-top:8px; }
   #pecasMed { list-style:none; padding:0; margin:8px 0 0; }
@@ -163,7 +171,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v16</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v17</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -218,6 +226,11 @@
         <ul id="pecasMed"></ul>
       </div>
       <p class="meta" id="semMedidas"></p>
+      <div class="acoes" style="margin-top:4px">
+        <button id="btnTabelas" class="btn" style="background:#ebe7df">📋 Ver tabelas</button>
+        <button id="btnTabelasPag" class="btn" style="background:#ebe7df">↗ Página à parte</button>
+      </div>
+      <div id="tabelasMed" class="card hidden"></div>
     </div>
 
     <!-- Separador: Atendimento -->
@@ -1299,6 +1312,51 @@ function listarPecasMed(tam) {
   });
 }
 document.getElementById('numCm').addEventListener('input', calcularMedida);
+
+/* Tabelas de medidas: uma por linha da folha Medidas (tipos juntos) e marca */
+function gruposMedidas() {
+  const g = {}, ordem = [];
+  MEDIDAS.forEach(m => {
+    const k = (m.tipos || m.tipo) + '|' + (m.marca || '');
+    if (!g[k]) { g[k] = { tipos: m.tipos || m.tipo, marca: m.marca || '', nota: '', linhas: {} }; ordem.push(k); }
+    if (m.nota && !g[k].nota) g[k].nota = m.nota;
+    g[k].linhas[m.tamanho + '|' + m.de + '|' + m.ate] = m;
+  });
+  return ordem.map(k => Object.assign(g[k], { linhas: Object.values(g[k].linhas).sort((a, b) => a.de - b.de) }));
+}
+function htmlTabelas(destacar) {
+  const cm = n => String(n).replace('.', ',');
+  const gs = gruposMedidas();
+  if (!gs.length) return '<p>Ainda não há medidas na folha Medidas.</p>';
+  return gs.map(g => {
+    const atual = destacar && semAcentos(g.tipos).split(/\s*[,;]\s*/).includes(semAcentos(med.tipo)) && (g.marca || '') === (med.marca || '');
+    return '<div class="grpMed' + (atual ? ' atual' : '') + '"><b>' + esc(g.tipos) + '</b><span>' + (g.marca ? 'Marca: ' + esc(g.marca) : 'Todas as marcas') + '</span></div>' +
+      (g.nota ? '<div style="font-size:.8rem;color:#666;margin:2px 0 4px">📐 ' + esc(g.nota) + '</div>' : '') +
+      '<table class="tabMedidas"><tr><th>Tamanho</th><th>De (cm)</th><th>Até (cm)</th><th>Observações</th></tr>' +
+      g.linhas.map(m => '<tr><td class="t">' + esc(m.tamanho) + '</td><td class="n">' + cm(m.de) + '</td><td class="n">' + cm(m.ate) + '</td><td>' + esc(m.obs || '') + '</td></tr>').join('') +
+      '</table>';
+  }).join('');
+}
+document.getElementById('btnTabelas').onclick = () => {
+  const box = document.getElementById('tabelasMed'), b = document.getElementById('btnTabelas');
+  const abrir = box.classList.contains('hidden');
+  box.innerHTML = abrir ? htmlTabelas(true) : '';
+  box.classList.toggle('hidden', !abrir);
+  b.textContent = abrir ? '✕ Fechar tabelas' : '📋 Ver tabelas';
+  if (abrir) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+document.getElementById('btnTabelasPag').onclick = () => {
+  const w = window.open('', '_blank');
+  if (!w) { toast('O browser bloqueou a página nova. Usa "Ver tabelas".'); return; }
+  w.document.write('<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Tabelas de medidas</title><style>body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:16px;color:#1f2a2e;max-width:760px}' +
+    'h1{font-size:1.3rem}.grpMed{display:flex;justify-content:space-between;gap:8px;margin-top:14px;break-after:avoid}.grpMed span{color:#666;font-size:.85rem}' +
+    '.tabMedidas{width:100%;border-collapse:collapse;margin:4px 0 10px;break-inside:avoid}.tabMedidas th,.tabMedidas td{border:1px solid #ccc;padding:5px 8px;text-align:left}' +
+    '.tabMedidas th{background:#f3f3f3}.tabMedidas td.n{text-align:right}.tabMedidas td.t{font-weight:700}' +
+    '.btn{padding:10px 14px;border:0;border-radius:8px;background:#1f6f5c;color:#fff;font-size:1rem}@media print{.btn{display:none}}</style></head><body>' +
+    '<h1>📏 Tabelas de medidas · Banco de Fardas</h1><button class="btn" onclick="print()">🖨 Imprimir</button>' + htmlTabelas(false) + '</body></html>');
+  w.document.close();
+};
 document.getElementById('filtroMed').addEventListener('input', calcularMedida);
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
