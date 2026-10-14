@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v30</title>
+<title>Stock de Fardas v31</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -225,7 +225,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v30</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v31</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -1555,16 +1555,73 @@ document.getElementById('btnPrecos').onclick = () => {
   if (abrir) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
+/* Página para imprimir: por grupo (Uniforme, Ginástica, Outros), tabelas estreitas, menino | menina lado a lado */
+function generoDe(t) { const m = semAcentos(t).match(/\b(menin[oa]s?|rapaz(es)?|raparigas?)\b/); return !m ? '' : /^(menina|rapariga)/.test(m[1]) ? 'F' : 'M'; }
+function grupoDosTipos(tipos) {
+  const nomes = String(tipos).split(/\s*[,;]\s*/).map(semAcentos);
+  const sing = t => t.split(' ').map(w => w.length > 3 ? w.replace(/(es|s)$/, '') : w).join(' ');
+  for (const n of nomes) {
+    const a = ARTIGOS.find(x => semAcentos(x.subcategoria) === n || sing(semAcentos(x.subcategoria)) === sing(n));
+    if (a) return a.categoria;
+  }
+  for (const n of nomes) {             // "Polo menino" ↔ peça "Polo"
+    const base = sing(n.replace(/\b(menin[oa]s?|rapaz(es)?|raparigas?)\b/g, '').replace(/\s+/g, ' ').trim());
+    const a = base && ARTIGOS.find(x => sing(semAcentos(x.subcategoria)) === base);
+    if (a) return a.categoria;
+  }
+  return 'Outros';
+}
+function tabelaImp(g) {
+  if (!g) return '<div class="vazio"></div>';
+  const cm = n => String(n).replace('.', ',');
+  const temObs = g.linhas.some(m => m.obs);
+  return '<div class="med"><div class="tit"><b>' + esc(g.tipos) + '</b>' + (g.marca ? ' <span>· ' + esc(g.marca) + '</span>' : '') + '</div>' +
+    (g.nota ? '<div class="nota">📐 ' + esc(g.nota) + '</div>' : '') +
+    '<table><tr><th>Tam.</th><th>De</th><th>Até</th>' + (temObs ? '<th>Obs.</th>' : '') + '</tr>' +
+    g.linhas.map(m => '<tr><td class="t">' + esc(m.tamanho) + '</td><td class="n">' + cm(m.de) + '</td><td class="n">' + cm(m.ate) + '</td>' +
+      (temObs ? '<td class="o">' + esc(m.obs || '') + '</td>' : '') + '</tr>').join('') + '</table></div>';
+}
+function htmlTabelasImpressao() {
+  const gs = gruposMedidas();
+  if (!gs.length) return '<p>Ainda não há medidas na folha Medidas.</p>';
+  const porGrupo = {};
+  gs.forEach(g => { const k = grupoDosTipos(g.tipos); (porGrupo[k] = porGrupo[k] || []).push(g); });
+  const ordem = ['Uniforme', 'Ginástica'].concat(Object.keys(porGrupo).filter(k => !['Uniforme', 'Ginástica', 'Outros'].includes(k)), ['Outros']);
+  return ordem.filter(k => porGrupo[k]).map(k => {
+    // pares menino | menina pela mesma peça (sem a palavra menino/menina) e mesma marca
+    const pares = {}, lista = [], soltas = [];
+    porGrupo[k].forEach(g => {
+      const gen = generoDe(g.tipos);
+      if (!gen) { soltas.push(g); return; }
+      const base = semAcentos(g.tipos).replace(/\b(menin[oa]s?|rapaz(es)?|raparigas?)\b/g, '').replace(/\s+/g, ' ').trim() + '|' + semAcentos(g.marca);
+      if (!pares[base]) { pares[base] = { M: null, F: null }; lista.push(pares[base]); }
+      if (pares[base][gen]) lista.push(pares[base] = { M: null, F: null });
+      pares[base][gen] = g;
+    });
+    let html = '<h2>' + esc(k) + '</h2>';
+    if (lista.length) html += '<div class="duas cab"><div>👦 Menino</div><div>👧 Menina</div></div>' +
+      lista.map(p => '<div class="duas">' + tabelaImp(p.M) + tabelaImp(p.F) + '</div>').join('');
+    if (soltas.length) html += (lista.length ? '<div class="cab sub">Para todos</div>' : '') + '<div class="tres">' + soltas.map(tabelaImp).join('') + '</div>';
+    return html;
+  }).join('');
+}
 document.getElementById('btnTabelasPag').onclick = () => {
   const w = window.open('', '_blank');
   if (!w) { toast('O browser bloqueou a página nova. Usa "Ver tabelas".'); return; }
   w.document.write('<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>Tabelas de medidas</title><style>body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:16px;color:#1f2a2e;max-width:760px}' +
-    'h1{font-size:1.3rem}.grpMed{display:flex;justify-content:space-between;gap:8px;margin-top:14px;break-after:avoid}.grpMed span{color:#666;font-size:.85rem}' +
-    '.tabMedidas{width:100%;border-collapse:collapse;margin:4px 0 10px;break-inside:avoid}.tabMedidas th,.tabMedidas td{border:1px solid #ccc;padding:5px 8px;text-align:left}' +
-    '.tabMedidas th{background:#f3f3f3}.tabMedidas td.n{text-align:right}.tabMedidas td.t{font-weight:700}' +
-    '.btn{padding:10px 14px;border:0;border-radius:8px;background:#1f6f5c;color:#fff;font-size:1rem}@media print{.btn{display:none}}</style></head><body>' +
-    '<h1>📏 Tabelas de medidas · Banco de Fardas</h1><button class="btn" onclick="print()">🖨 Imprimir</button>' + htmlTabelas(false) + '</body></html>');
+    '<title>Tabelas de medidas</title><style>' +
+    'body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:16px;color:#1f2a2e;font-size:13px}' +
+    'h1{font-size:1.25rem;margin:0 0 6px}h2{font-size:1.05rem;margin:14px 0 6px;padding:3px 8px;background:#1f6f5c;color:#fff;border-radius:4px;break-after:avoid}' +
+    '.duas{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;break-inside:avoid;margin-bottom:6px}' +
+    '.duas.cab,.cab.sub{font-weight:700;color:#555;margin-bottom:2px}.cab.sub{margin-top:8px;border-top:1px dashed #ccc;padding-top:4px}' +
+    '.tres{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:6px 26px}.tres .med{break-inside:avoid}' +
+    '.med .tit{margin:2px 0}.med .tit span{color:#666}.nota{font-size:11px;color:#666;margin:0 0 2px}' +
+    'table{border-collapse:collapse}th,td{border:1px solid #ccc;padding:2px 7px;text-align:left}th{background:#f3f3f3;font-weight:600}' +
+    'td.n{text-align:right;white-space:nowrap}td.t{font-weight:700}td.o{font-size:11px;max-width:16em}' +
+    '.btn{padding:8px 14px;border:0;border-radius:8px;background:#1f6f5c;color:#fff;font-size:1rem;margin-bottom:6px}' +
+    '@media print{.btn{display:none}body{margin:0}@page{size:A4;margin:10mm}}' +
+    '</style></head><body>' +
+    '<h1>📏 Tabelas de medidas · Banco de Fardas</h1><button class="btn" onclick="print()">🖨 Imprimir</button>' + htmlTabelasImpressao() + '</body></html>');
   w.document.close();
 };
 document.getElementById('filtroMed').addEventListener('input', calcularMedida);
