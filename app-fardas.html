@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v19</title>
+<title>Stock de Fardas v20</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -75,6 +75,13 @@
   .grpMed { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-top:10px; }
   .grpMed b { font-size:.95rem; } .grpMed span { font-size:.8rem; color:var(--muted); }
   .grpMed.atual b { color:var(--acc); }
+  .tabPrecos { width:100%; border-collapse:collapse; font-size:.85rem; background:#fff; }
+  .tabPrecos th, .tabPrecos td { border:1px solid var(--line); padding:5px 4px; text-align:center; white-space:nowrap; }
+  .tabPrecos th:first-child, .tabPrecos td:first-child { text-align:left; white-space:normal; }
+  .tabPrecos th { background:var(--bg); font-weight:600; }
+  .tabPrecos tr.grp td { background:#f4f1ea; font-weight:700; text-align:left; }
+  .tabPrecos td.na { color:#bbb; }
+  .legenda { font-size:.8rem; color:var(--muted); margin-top:8px; line-height:1.5; }
   .obsMed { margin-top:10px; padding:8px 10px; border-radius:10px; background:#fff6db; color:#7a5a00; font-weight:700; }
   .comoMedir { background:var(--bg); border-radius:10px; padding:8px 10px; font-size:.88rem; color:var(--muted); margin-top:8px; }
   #pecasMed { list-style:none; padding:0; margin:8px 0 0; }
@@ -171,7 +178,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v19</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v20</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -231,6 +238,8 @@
         <button id="btnTabelasPag" class="btn" style="background:#ebe7df">↗ Página à parte</button>
       </div>
       <div id="tabelasMed" class="card hidden"></div>
+      <button id="btnPrecos" class="btn" style="background:#ebe7df;width:100%;margin-top:10px">💶 Ver preços</button>
+      <div id="tabelaPrecos" class="card hidden"></div>
     </div>
 
     <!-- Separador: Atendimento -->
@@ -568,12 +577,13 @@ function normalizarArtigo(a) {
   if (!a.precos) { a.precos = {}; ESTADOS.forEach(e => a.precos[e.chave] = a.preco); }
   a.stock = ESTADOS.reduce((s, e) => s + (a.est[e.chave] || 0), 0);
 }
+const estadosDe = a => (a && a.soBoa) ? ESTADOS.filter(e => e.chave === 'Boa') : ESTADOS;   // sapatilhas: só "Boa"
 const nomeEst = k => (ESTADOS.find(e => e.chave === k) || { nome: k }).nome;
 const precoEst = (a, k) => a.precos ? a.precos[k] : a.preco;
 
 function mostrar(a) {
   atual = a; qtd = 1; motivo = '';
-  if (!ESTADOS.some(e => e.chave === estSel)) estSel = 'Boa';
+  if (a.soBoa || !ESTADOS.some(e => e.chave === estSel)) estSel = 'Boa';
   const f = document.getElementById('ficha');
   f.innerHTML =
     '<button class="fechar" id="fechar" aria-label="Fechar">✕</button>' +
@@ -611,7 +621,7 @@ function desenharEstadosFicha() {
   const a = atual, el = document.getElementById('estados');
   if (!el) return;
   el.innerHTML = '';
-  ESTADOS.forEach(e => {
+  estadosDe(a).forEach(e => {
     const b = document.createElement('button');
     const n = a.est[e.chave] || 0;
     b.className = 'est' + (estSel === e.chave ? ' sel' : '') + (n ? '' : ' vazio');
@@ -657,7 +667,7 @@ const partes = k => { const i = k.lastIndexOf('|'); return [k.slice(0, i), k.sli
    quem leva → o primeiro estado que ainda tem peças disponíveis */
 function estadoPorDefeito(tipo, a) {
   if (tipo === 'entrega') return 'Boa';
-  const e = ESTADOS.find(e => disponivel(a, e.chave) > 0);
+  const e = estadosDe(a).find(e => disponivel(a, e.chave) > 0);
   return e ? e.chave : 'Boa';
 }
 function disponivel(a, est) {
@@ -667,7 +677,7 @@ function disponivel(a, est) {
 /* Entregas: só tipo de peça + estado (sem tamanho). CARRO.entrega = { 'Tipo|Estado': qtd } */
 function tiposDePeca() {
   const m = {};
-  ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco }; });
+  ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco, soBoa: !!a.soBoa }; });
   return Object.values(m).sort((x, y) => x.grupo.localeCompare(y.grupo, 'pt') || x.tipo.localeCompare(y.tipo, 'pt'));
 }
 const tipoInfo = sub => tiposDePeca().find(t => t.tipo === sub);
@@ -899,7 +909,7 @@ function desenharEntregas() {
   if (!ks.length) { ul.innerHTML = '<li class="vaziaL">Nenhuma peça.</li>'; return; }
   ks.forEach(k => {
     const [sub, est] = partes(k), q = CARRO.entrega[k], p = precoTipo(sub, est);
-    const opcoes = ESTADOS.map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
+    const opcoes = estadosDe(tipoInfo(sub)).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
       (precoTipo(sub, e.chave) != null ? ' · ' + eur(precoTipo(sub, e.chave)) : '') + '</option>').join('');
     const li = document.createElement('li');
     li.innerHTML = '<div class="nm">' + esc(sub) + '<span class="espTag">⏳ sem tamanho</span>' +
@@ -926,7 +936,7 @@ function desenharAt() {
       const [id, est] = partes(k), a = art(id); if (!a) return;
       const q = CARRO[tipo][k], p = precoEst(a, est);
       const semStock = tipo === 'leva' && q > (a.est[est] || 0);
-      const opcoes = ESTADOS.map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
+      const opcoes = estadosDe(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
         esc(e.nome) + (tipo === 'leva' ? ' (' + (a.est[e.chave] || 0) + ')' : '') +
         (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
       const li = document.createElement('li');
@@ -1354,6 +1364,32 @@ document.getElementById('btnTabelas').onclick = () => {
   b.textContent = abrir ? '✕ Fechar tabelas' : '📋 Ver tabelas';
   if (abrir) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
+/* Tabela de preços por tipo de peça e estado (só consulta) */
+function htmlPrecos() {
+  const cod = e => (e.nome.match(/^(\S+\s)?(C\d+)/) || [, '', e.cod || ''])[0].trim() || e.chave;
+  const tipos = tiposDePeca();
+  if (!tipos.length) return '<p class="meta">Sem peças.</p>';
+  let html = '<table class="tabPrecos"><tr><th>Peça</th>' + ESTADOS.map(e => '<th>' + esc(cod(e)) + '</th>').join('') + '</tr>', grp = null;
+  tipos.forEach(t => {
+    if (t.grupo !== grp) { grp = t.grupo; html += '<tr class="grp"><td colspan="' + (ESTADOS.length + 1) + '">' + esc(grp) + '</td></tr>'; }
+    html += '<tr><td>' + esc(t.tipo) + '</td>' + ESTADOS.map(e => {
+      const p = t.precos ? t.precos[e.chave] : t.preco;
+      return (t.soBoa && e.chave !== 'Boa') || p == null ? '<td class="na">—</td>' : '<td>' + eur(p) + '</td>';
+    }).join('') + '</tr>';
+  });
+  if (LIVROS.length) html += '<tr class="grp"><td colspan="' + (ESTADOS.length + 1) + '">Livros PNL / EMRC: ' + eur(LIVROS[0].preco) + ' cada</td></tr>';
+  html += '</table><div class="legenda">' + ESTADOS.map(e => esc(e.nome)).join('<br>') + '<br>— = não se aplica (ex.: sapatilhas só “Boa”) ou sem preço</div>';
+  return html;
+}
+document.getElementById('btnPrecos').onclick = () => {
+  const box = document.getElementById('tabelaPrecos'), b = document.getElementById('btnPrecos');
+  const abrir = box.classList.contains('hidden');
+  box.innerHTML = abrir ? htmlPrecos() : '';
+  box.classList.toggle('hidden', !abrir);
+  b.textContent = abrir ? '✕ Fechar preços' : '💶 Ver preços';
+  if (abrir) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
 document.getElementById('btnTabelasPag').onclick = () => {
   const w = window.open('', '_blank');
   if (!w) { toast('O browser bloqueou a página nova. Usa "Ver tabelas".'); return; }
