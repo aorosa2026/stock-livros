@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v24</title>
+<title>Stock de Fardas v26</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -107,6 +107,19 @@
   .sec-tit small { font-weight:400; color:var(--muted); }
   .sec-tit.leva { color:var(--leva); } .sec-tit.ent { color:var(--acc); }
   .linhas { list-style:none; padding:0; margin:0 0 14px; }
+  .bloco { border-radius:12px; margin:0 0 16px; border:2px solid var(--line); overflow:hidden; background:#fff; }
+  .bloco .linhas { margin:0; padding:0 10px; }
+  .bloco > .meta { padding:0 10px; }
+  .bloco-tit { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; font-size:1.15rem; font-weight:800; letter-spacing:.03em; color:#fff; }
+  .bloco-tit span { font-size:.85rem; font-weight:400; letter-spacing:0; text-align:right; }
+  .bloco-tit small { color:inherit; opacity:.85; }
+  .bloco-tit b { font-size:1rem; font-weight:800; margin-left:6px; }
+  .bloco.leva { border-color:var(--leva); } .bloco.leva .bloco-tit { background:var(--leva); }
+  .bloco.leva .linhas li { border-left:4px solid var(--leva-bg); padding-left:8px; }
+  .bloco.ent { border-color:var(--acc); } .bloco.ent .bloco-tit { background:var(--acc); }
+  .bloco.ent .linhas li { border-left:4px solid var(--ok); padding-left:8px; }
+  .bloco.liv { border-color:#c9b98f; } .bloco.liv .bloco-tit { background:#f3ecd9; color:#5e4b16; font-size:1rem; }
+  .bloco .linhas .nm { font-size:1.02rem; }
   .linhas li { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); }
   .linhas li:first-child { border-top:0; }
   .linhas .nm { flex:1; min-width:0; }
@@ -207,7 +220,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v24</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v26</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -236,6 +249,7 @@
       <ul id="resultados"></ul>
       <p id="carregar" class="meta">A carregar lista…</p>
       <p class="meta"><a id="linkQR" target="_blank" rel="noopener">🖨 Imprimir etiquetas QR</a></p>
+      <p class="meta" style="margin-top:-6px"><a id="linkPrecario" target="_blank" rel="noopener">💶 Imprimir preçário</a></p>
     </div>
 
     <!-- Separador: Espera -->
@@ -288,14 +302,19 @@
       <ul id="sugA"></ul>
 
       <div class="card">
-        <div class="sec-tit leva">⬆ Leva <small id="nLeva"></small></div>
-        <ul id="lLeva" class="linhas"></ul>
-        <div class="sec-tit ent">⬇ Entrega <small id="nEnt"></small></div>
-        <p class="meta" style="margin:0 0 4px">Com tamanho: entra logo no stock. Sem tamanho: vai para a sala de espera ⏳ e é inventariada depois.</p>
-        <ul id="lEnt" class="linhas"></ul>
-
-        <div class="sec-tit" style="margin-top:14px">📚 Livros PNL / EMRC <small id="nLiv"></small></div>
-        <ul id="lLiv" class="linhas"></ul>
+        <section class="bloco leva">
+          <div class="bloco-tit">⬆ LEVA <span><small id="nLeva"></small> <b id="tLevaB"></b></span></div>
+          <ul id="lLeva" class="linhas"></ul>
+        </section>
+        <section class="bloco ent">
+          <div class="bloco-tit">⬇ ENTREGA <span><small id="nEnt"></small> <b id="tEntB"></b></span></div>
+          <p class="meta" style="margin:6px 0 0">Com tamanho: entra logo no stock. Sem tamanho: vai para a sala de espera ⏳.</p>
+          <ul id="lEnt" class="linhas"></ul>
+        </section>
+        <section class="bloco liv">
+          <div class="bloco-tit">📚 LIVROS PNL / EMRC <span><small id="nLiv"></small></span></div>
+          <ul id="lLiv" class="linhas"></ul>
+        </section>
 
         <div class="sec-tit">🎟 Talão <small>opcional</small></div>
         <div class="talao-box">
@@ -306,6 +325,7 @@
               <button id="btnTalao" class="btn btn-acc">Procurar</button>
             </div>
             <label class="chk"><input type="checkbox" id="talaoFech"> incluir talões esgotados ou fechados</label>
+            <a id="linkForm" class="btn hidden" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;background:#ebe7df;color:var(--ink);margin-top:8px">➕ Novo talão (formulário)</a>
             <ul id="talaoLista"></ul>
           </div>
         </div>
@@ -380,6 +400,8 @@ async function entrar(automatico) {
     guardar('fardas_nome', nome); guardar('fardas_pw', pw);
     ARTIGOS = d.artigos;
     AVISO_PRECOS = d.avisoPrecos || '';
+    const lf = document.getElementById('linkForm');
+    if (d.formTaloes) { lf.href = d.formTaloes; lf.classList.remove('hidden'); } else lf.classList.add('hidden');
     if (d.estados && d.estados.length) ESTADOS = d.estados;
     MEDIDAS = d.medidas || [];
     LIVROS = d.livros || LIVROS;
@@ -422,6 +444,7 @@ async function irPara(tab) {
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => irPara(b.dataset.tab));
 document.getElementById('linkQR').href = API_URL + '?action=folhaqr';
+document.getElementById('linkPrecario').href = API_URL + '?action=precario';
 
 /* ---------- Leitura QR em direto ---------- */
 /* Um só leitor para os dois separadores: elId = onde aparece a câmara, aoLer = o que fazer com o texto */
@@ -1049,6 +1072,7 @@ function desenharEntregas() {
   });
 }
 
+const livTot = dir => LIVROS.reduce((t, lv) => t + (CARRO_LIV[dir][lv.sub] || 0) * lv.preco, 0);
 function desenharAt() {
   if (ABERTO_A) listarA();
   desenharEntregas();
@@ -1083,6 +1107,8 @@ function desenharAt() {
   document.getElementById('nEnt').textContent = c.nE ? c.nE + (c.nE === 1 ? ' peça' : ' peças') : '';
   document.getElementById('tLeva').textContent = eur(c.tL);
   document.getElementById('tEnt').textContent = eur(c.tE);
+  document.getElementById('tLevaB').textContent = c.nL ? eur(c.tL - livTot('leva')) : '';
+  document.getElementById('tEntB').textContent = c.nE ? eur(c.tE - livTot('entrega')) : '';
   const s = document.getElementById('saldo');
   const ct = contasTalao(c);
   if (ct) {
