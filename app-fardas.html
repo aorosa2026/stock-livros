@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v17</title>
+<title>Stock de Fardas v19</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -171,7 +171,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v17</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v19</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -326,11 +326,12 @@ function lerGuardado(k) { try { return localStorage.getItem(k) || ''; } catch (e
 document.getElementById('nome').value = lerGuardado('fardas_nome');
 document.getElementById('btnEntrar').onclick = entrar;
 document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
-document.getElementById('btnSair').onclick = () => { guardar('fardas_pw', ''); location.reload(); };
+document.getElementById('btnSair').onclick = () => { guardar('fardas_pw', ''); try { localStorage.removeItem('fardas_rascunho'); localStorage.removeItem('fardas_estado'); } catch (e) {} location.reload(); };
 
 async function entrar(automatico) {
   const nome = document.getElementById('nome').value.trim() || lerGuardado('fardas_nome');
-  const pw = automatico === true ? lerGuardado('fardas_pw') : document.getElementById('pw').value;
+  // Sem nada escrito no campo, tenta a palavra-passe já guardada neste aparelho
+  const pw = automatico === true ? lerGuardado('fardas_pw') : (document.getElementById('pw').value || lerGuardado('fardas_pw'));
   if (!nome) { toast('Escreve o teu nome.'); return; }
   if (!pw) return;
   SESSAO = { nome, pw };
@@ -352,20 +353,27 @@ async function entrar(automatico) {
     desenharFiltros(); filtrar();
     // Se o QR tiver o link da página com ?id=..., abre logo a ficha
     const idLink = new URLSearchParams(location.search).get('id');
-    if (idLink) abrirPorCodigo(idLink);
+    if (idLink) abrirPorCodigo(idLink); else restaurarEstado();
   } catch (e) {
-    guardar('fardas_pw', '');
-    if (automatico !== true) toast(API_URL.indexOf('/exec') < 0 || API_URL.indexOf('COLAR') >= 0
-      ? 'Falta colar o link do Apps Script no index.html.' : e.message);
+    const pwErrada = /palavra-passe/i.test(e.message || '');
+    if (pwErrada) guardar('fardas_pw', '');      // só esquece a palavra-passe se estiver mesmo errada
+    if (pwErrada || automatico !== true) toast(pwErrada ? e.message : 'Sem ligação ao servidor. Verifica a rede e toca em Entrar (não precisas de escrever a palavra-passe).');
+    else toast('Sem ligação. Toca em Entrar quando houver rede.');
   } finally {
     b.disabled = false; b.textContent = 'Entrar';
   }
 }
 if (lerGuardado('fardas_pw')) entrar(true);
+// Se a rede voltar e ainda estivermos no ecrã de entrada, tenta outra vez sozinha
+window.addEventListener('online', () => {
+  if (lerGuardado('fardas_pw') && !document.getElementById('ecraEntrada').classList.contains('hidden')) entrar(true);
+});
 
 /* ---------- Separadores ---------- */
 const SEPARADORES = { inv: 'tabInv', at: 'tabAt', med: 'tabMed', esp: 'tabEsp' };
+let TAB_ATUAL = 'inv';
 async function irPara(tab) {
+  TAB_ATUAL = tab;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('sel', x.dataset.tab === tab));
   await pararLeitor();
   Object.entries(SEPARADORES).forEach(([t, id]) => document.getElementById(id).classList.toggle('hidden', t !== tab));
@@ -959,6 +967,7 @@ function desenharAt() {
   const av = document.getElementById('avisoAt');
   av.textContent = avisos.join(' '); av.classList.toggle('hidden', !avisos.length);
   document.getElementById('btnConfirmar').disabled = !(c.nL + c.nE + c.nLv) || c.falta.length > 0;
+  guardarEstado();
 }
 
 function resumoAt() {
@@ -1358,6 +1367,53 @@ document.getElementById('btnTabelasPag').onclick = () => {
   w.document.close();
 };
 document.getElementById('filtroMed').addEventListener('input', calcularMedida);
+
+/* =====================================================================
+   RASCUNHO DO ATENDIMENTO: enquanto um atendimento não é confirmado, o que já foi
+   introduzido (peças, livros, talão) fica guardado neste aparelho. Se a página recarregar
+   (ex.: ao mudar de app) é recuperado. Ao confirmar ou limpar, o rascunho é apagado.
+   Um rascunho com mais de 2 horas é ignorado.
+   ===================================================================== */
+const RASCUNHO = 'fardas_rascunho', VALIDADE_MS = 2 * 3600 * 1000;
+function temAtendimento() {
+  return Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length +
+    Object.keys(CARRO_LIV.leva).length + Object.keys(CARRO_LIV.entrega).length > 0 || !!TALAO;
+}
+function guardarEstado() {
+  if (document.getElementById('ecraApp').classList.contains('hidden')) return;   // ainda não entrou
+  try {
+    if (!temAtendimento()) { localStorage.removeItem(RASCUNHO); return; }
+    localStorage.setItem(RASCUNHO, JSON.stringify({
+      t: Date.now(), leva: CARRO.leva, entrega: CARRO.entrega, liv: CARRO_LIV, talao: TALAO, idPendente
+    }));
+  } catch (e) {}
+}
+async function restaurarEstado() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(RASCUNHO) || 'null'); } catch (e) {}
+  if (!s) return;
+  if (Date.now() - (s.t || 0) > VALIDADE_MS) { try { localStorage.removeItem(RASCUNHO); } catch (e) {} return; }
+  const existe = k => !!art(partes(k)[0]);
+  CARRO.leva = {}; Object.entries(s.leva || {}).forEach(([k, q]) => { if (existe(k)) CARRO.leva[k] = q; });
+  CARRO.entrega = Object.assign({}, s.entrega || {});
+  CARRO_LIV.leva = Object.assign({}, (s.liv || {}).leva || {});
+  CARRO_LIV.entrega = Object.assign({}, (s.liv || {}).entrega || {});
+  idPendente = s.idPendente || null;
+  if (s.talao) escolherTalao(s.talao);
+  await irPara('at');
+  toast('↩ Atendimento em curso recuperado');
+  // O saldo do talão pode ter mudado entretanto: vai buscá-lo outra vez
+  if (s.talao) {
+    try {
+      const r = await api('taloes', null, { q: s.talao.canhao, fechados: '1' });
+      const t = (r.taloes || []).find(x => x.canhao === s.talao.canhao);
+      if (t && TALAO && TALAO.canhao === t.canhao) escolherTalao(t);
+    } catch (e) {}
+  }
+}
+// Guarda sempre que a app vai para segundo plano (mudar de app, bloquear o ecrã…) e a cada alteração
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarEstado(); });
+window.addEventListener('pagehide', guardarEstado);
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
