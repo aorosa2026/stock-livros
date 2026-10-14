@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v29</title>
+<title>Stock de Fardas v30</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -225,7 +225,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v29</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v30</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -453,16 +453,24 @@ document.getElementById('linkPrecario').href = API_URL + '?action=precario';
 
 /* ---------- Leitura QR em direto ---------- */
 /* Um só leitor para os dois separadores: elId = onde aparece a câmara, aoLer = o que fazer com o texto */
+const LEITURA_MS = 800;   // tempo (ms) com o código parado no quadrado antes de o aceitar — aumentar se ainda for rápido
 async function iniciarLeitor(elId, btn, aoLer) {
   if (scanner) { const mesmo = scanBtn === btn; await pararLeitor(); if (mesmo) return; }
   scanner = new Html5Qrcode(elId, { verbose: false,
     formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
     experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
   scanBtn = btn; scanTxt = btn.textContent; btn.textContent = '✖ Parar';
+  // Só aceita quando vê o MESMO código durante LEITURA_MS seguidos (dá tempo de centrar numa folha com vários QR)
+  let visto = '', desde = 0, ultimo = 0;
   try {
     await scanner.start({ facingMode: 'environment' },
-      { fps: 12, qrbox: (w, h) => { const s = Math.min(w, h) * 0.7; return { width: s, height: s }; } },
+      { fps: 10, qrbox: (w, h) => { const s = Math.min(w, h) * 0.5; return { width: s, height: s }; } },
       async txt => {
+        const agora = Date.now();
+        if (txt !== visto || agora - ultimo > 400) { visto = txt; desde = agora; }   // código novo ou perdeu-o de vista → recomeça
+        ultimo = agora;
+        if (agora - desde < LEITURA_MS) return;
+        visto = '';
         if (navigator.vibrate) navigator.vibrate(80);
         await pararLeitor();
         aoLer(txt);
