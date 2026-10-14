@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v21</title>
+<title>Stock de Fardas v22</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -122,6 +122,20 @@
   #sugA li { display:flex; align-items:center; gap:8px; background:var(--bg); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
   #sugA li .nm { flex:1; min-width:0; }
   #sugA li small { display:block; color:var(--muted); }
+  .modoAt { display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#ebe7df; padding:4px; border-radius:12px; margin-bottom:10px; }
+  .modoAt button { border:0; border-radius:9px; padding:11px 6px; font-weight:700; font-size:1rem; background:transparent; color:var(--muted); cursor:pointer; }
+  .modoAt button.sel.leva { background:var(--leva); color:#fff; } .modoAt button.sel.ent { background:var(--acc); color:#fff; }
+  .btn-ent { background:var(--acc); color:#fff; width:100%; }
+  #sugA li.res { flex-wrap:wrap; }
+  #sugA li.res .nm { flex:1 1 100%; }
+  .estBts { display:flex; flex-wrap:wrap; gap:6px; flex:1 1 100%; }
+  .estBt { border:1px solid var(--line); background:#fff; border-radius:999px; padding:7px 11px; font-size:.86rem; cursor:pointer; color:var(--ink); }
+  .estBt b { font-weight:700; }
+  .estBt small { display:inline !important; color:var(--muted); margin-left:3px; }
+  .estBt.leva { border-color:#b9c9de; } .estBt.ent { border-color:#a9d3c3; }
+  .estBt:disabled { opacity:.4; cursor:default; }
+  #sugA li.espRes { background:#fff6db; }
+  .stkTag { display:inline-block; font-size:.75rem; background:var(--ok); color:#155443; border-radius:999px; padding:1px 8px; margin-left:4px; }
   .pq { border:0; border-radius:8px; padding:8px 10px; font-weight:600; font-size:.85rem; cursor:pointer; }
   .pq.leva { background:var(--leva-bg); color:var(--leva); } .pq.ent { background:var(--ok); color:#155443; }
   .tot3 { display:grid; grid-template-columns:1fr 1fr; gap:6px; color:var(--muted); font-size:.9rem; }
@@ -178,7 +192,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v21</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v22</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -244,9 +258,11 @@
 
     <!-- Separador: Atendimento -->
     <div id="tabAt" class="hidden">
-      <div class="acoes" style="margin-top:0">
-        <button id="scanLeva" class="btn btn-leva" style="grid-column:1 / -1">📷 Ler QR da peça que leva</button>
+      <div class="modoAt" id="modoAt">
+        <button data-m="leva" class="leva sel">⬆ Leva</button>
+        <button data-m="entrega" class="ent">⬇ Entrega</button>
       </div>
+      <button id="scanA" class="btn btn-leva">📷 Ler QR da peça que leva</button>
       <div id="leitorA" style="margin-top:10px;border-radius:12px;overflow:hidden"></div>
       <input id="pesqA" type="search" placeholder="Leva: procura polo 8, saia 10…" autocomplete="off">
       <div class="filtro-tit">Categoria</div>
@@ -260,10 +276,8 @@
         <div class="sec-tit leva">⬆ Leva <small id="nLeva"></small></div>
         <ul id="lLeva" class="linhas"></ul>
         <div class="sec-tit ent">⬇ Entrega <small id="nEnt"></small></div>
-        <p class="meta" style="margin:0 0 4px">Sem tamanho: vai para a sala de espera ⏳ e é inventariada depois.</p>
+        <p class="meta" style="margin:0 0 4px">Com tamanho: entra logo no stock. Sem tamanho: vai para a sala de espera ⏳ e é inventariada depois.</p>
         <ul id="lEnt" class="linhas"></ul>
-        <button id="btnAddEnt" class="btn" style="background:var(--ok);color:#155443;width:100%">+ Entrega</button>
-        <div id="pickEnt" class="hidden" style="margin:8px 0 14px"></div>
 
         <div class="sec-tit" style="margin-top:14px">📚 Livros PNL / EMRC <small id="nLiv"></small></div>
         <ul id="lLiv" class="linhas"></ul>
@@ -664,7 +678,9 @@ async function movimentar(sinal) {
 /* =====================================================================
    ATENDIMENTO
    ===================================================================== */
-const CARRO = { leva: {}, entrega: {} };   // { 'id|estado': quantidade }
+// leva/entrega: { 'id|estado': qtd } (peça com tamanho) · espera: { 'Tipo|estado': qtd } (entregue sem tamanho)
+const CARRO = { leva: {}, entrega: {}, espera: {} };
+let MODO_AT = 'leva';
 let idPendente = null;                     // mantém o mesmo código se for preciso repetir o envio
 
 const eur = n => (n || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -683,7 +699,7 @@ function disponivel(a, est) {
   return (a.est[est] || 0) - (CARRO.leva[chaveC(a.id, est)] || 0);
 }
 
-/* Entregas: só tipo de peça + estado (sem tamanho). CARRO.entrega = { 'Tipo|Estado': qtd } */
+/* Entregas sem tamanho: só tipo de peça + estado. CARRO.espera = { 'Tipo|Estado': qtd } */
 function tiposDePeca() {
   const m = {};
   ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco, estadosOk: a.estadosOk, vende: a.vende !== false }; });
@@ -694,30 +710,11 @@ const precoTipo = (sub, est) => { const t = tipoInfo(sub); return t ? (t.precos 
 function juntarEnt(sub, n, est) {
   est = est || 'Boa';
   const k = chaveC(sub, est);
-  CARRO.entrega[k] = Math.max(0, (CARRO.entrega[k] || 0) + (n || 1));
-  if (!CARRO.entrega[k]) delete CARRO.entrega[k];
+  CARRO.espera[k] = Math.max(0, (CARRO.espera[k] || 0) + (n || 1));
+  if (!CARRO.espera[k]) delete CARRO.espera[k];
   idPendente = null;
   desenharAt();
 }
-document.getElementById('btnAddEnt').onclick = () => {
-  const box = document.getElementById('pickEnt');
-  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
-  box.innerHTML = '';
-  let grp = '';
-  tiposDePeca().filter(t => t.vende).forEach(t => {
-    if (t.grupo !== grp) {
-      grp = t.grupo;
-      const h = document.createElement('div'); h.className = 'tipoGrp'; h.textContent = grp; box.appendChild(h);
-      box.appendChild(Object.assign(document.createElement('div'), { className: 'chips' }));
-    }
-    const b = document.createElement('button');
-    b.className = 'chip addEnt'; b.textContent = '+ ' + t.tipo;
-    b.onclick = () => { juntarEnt(t.tipo, 1); toast('⬇ Entrega: ' + t.tipo); };
-    box.lastChild.appendChild(b);
-  });
-  box.classList.remove('hidden');
-};
-
 function juntar(tipo, a, n, est) {
   if (!a) return;
   est = est || estadoPorDefeito(tipo, a);
@@ -736,10 +733,26 @@ function mudarEstadoLinha(tipo, k, novo) {
   desenharAt();
 }
 
-document.getElementById('scanLeva').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
+/* Leva / Entrega: o mesmo QR, pesquisa e filtros servem para os dois, conforme o botão escolhido */
+function mudarModoAt(m) {
+  MODO_AT = m;
+  document.querySelectorAll('#modoAt button').forEach(b => b.classList.toggle('sel', b.dataset.m === m));
+  const sc = document.getElementById('scanA');
+  sc.className = 'btn ' + (m === 'leva' ? 'btn-leva' : 'btn-ent');
+  if (!scanner) sc.textContent = m === 'leva' ? '📷 Ler QR da peça que leva' : '📷 Ler QR da peça que entrega';
+  pesqA.placeholder = m === 'leva' ? 'Leva: procura polo 8, saia 10…' : 'Entrega: procura polo 8, saia…';
+  listarA();
+}
+document.querySelectorAll('#modoAt button').forEach(b => b.onclick = () => mudarModoAt(b.dataset.m));
+// O QR mostra a peça na lista, com os botões dos estados para escolher
+document.getElementById('scanA').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
   const a = artigoDoQR(t); if (!a) return;
   if (a.vende === false) { toast(nomeArtigo(a) + ': não se vende (não entra no atendimento).'); return; }
-  juntar('leva', a); toast('⬆ Leva: ' + nomeArtigo(a) + ' ' + a.tamanho); });
+  filtroA.cat = filtroA.sub = ''; filtroA.tam = []; desenharFiltrosA();
+  pesqA.value = a.id; listarA();
+  toast((MODO_AT === 'leva' ? '⬆ Leva: ' : '⬇ Entrega: ') + nomeArtigo(a) + ' ' + a.tamanho + ' — escolhe o estado');
+});
+const curtoEst = e => String(e.nome).split(' · ')[0];
 
 /* Pesquisa no atendimento: cada resultado tem botões Leva / Entrega */
 const pesqA = document.getElementById('pesqA');
@@ -782,25 +795,54 @@ function listarA() {
   ul.innerHTML = ''; cont.textContent = '';
   const palavras = semAcentos(pesqA.value.trim()).split(/\s+/).filter(Boolean);
   if (!palavras.length && !filtroA.cat && !filtroA.sub && !filtroA.tam.length) return;
+  const ent = MODO_AT === 'entrega';
   const res = vendiveis().filter(a =>
     (!filtroA.cat || a.categoria === filtroA.cat) &&
     (!filtroA.sub || a.subcategoria === filtroA.sub) &&
     (!filtroA.tam.length || filtroA.tam.includes(a.tamanho)) &&
     palavras.every(p => semAcentos([a.id, a.categoria, a.subcategoria, a.tamanho, a.descricao].join(' ')).includes(p)))
     .sort((x, y) => x.subcategoria.localeCompare(y.subcategoria, 'pt') || ordTam(x.tamanho, y.tamanho));
+
+  // Entrega sem tamanho (sala de espera): uma linha por tipo de peça encontrado
+  if (ent && !filtroA.tam.length) {
+    const tipos = unicos(res.map(a => a.subcategoria)).map(tipoInfo).filter(t => t && t.vende);
+    tipos.slice(0, 4).forEach(t => {
+      const li = document.createElement('li'); li.className = 'res espRes';
+      li.innerHTML = '<div class="nm">' + esc(t.tipo) + ' <span class="espTag">⏳ sem tamanho</span><small>Ainda não sabes o tamanho: vai para a sala de espera</small></div>';
+      const box = document.createElement('div'); box.className = 'estBts';
+      estadosDe(t).forEach(e => {
+        const p = precoTipo(t.tipo, e.chave), b = document.createElement('button');
+        b.className = 'estBt ent'; b.innerHTML = '<b>' + esc(curtoEst(e)) + '</b><small>' + (p != null ? eur(p) : '—') + '</small>';
+        b.title = e.nome;
+        b.onclick = () => { juntarEnt(t.tipo, 1, e.chave); toast('⬇ Entrega: ' + t.tipo + ' sem tamanho (' + curtoEst(e) + ')'); };
+        box.appendChild(b);
+      });
+      li.appendChild(box); ul.appendChild(li);
+    });
+  }
+
   cont.textContent = res.length + (res.length === 1 ? ' peça' : ' peças') + (res.length > 60 ? ' (a mostrar 60 — escolhe um tipo ou tamanho)' : '');
   res.slice(0, 60).forEach(a => {
-      const li = document.createElement('li');
-      li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><small>' +
-        (precoEst(a, 'Boa') != null ? eur(precoEst(a, 'Boa')) : 'sem preço') + ' · stock ' + a.stock +
-        (a.stock !== (a.est.Boa || 0) ? ' (' + (a.est.Boa || 0) + ' boas)' : '') + '</small></div>';
-      [['leva', '⬆ Leva']].forEach(([t, r]) => {
-        const b = document.createElement('button');
-        b.className = 'pq ' + (t === 'leva' ? 'leva' : 'ent'); b.textContent = r;
-        b.onclick = () => { juntar(t, a); toast((t === 'leva' ? '⬆ Leva: ' : '⬇ Entrega: ') + nomeArtigo(a) + ' ' + a.tamanho); };
-        li.appendChild(b);
-      });
-      ul.appendChild(li);
+    const li = document.createElement('li'); li.className = 'res';
+    li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
+      (ent ? ' <span class="stkTag">entra no stock</span>' : '') + '<small>stock ' + a.stock +
+      (a.stock !== (a.est.Boa || 0) ? ' (' + (a.est.Boa || 0) + ' boas)' : '') + '</small></div>';
+    const box = document.createElement('div'); box.className = 'estBts';
+    (ent ? estadosDe(a) : estadosComStock(a)).forEach(e => {
+      const p = precoEst(a, e.chave), b = document.createElement('button');
+      const livres = disponivel(a, e.chave);
+      b.className = 'estBt ' + (ent ? 'ent' : 'leva');
+      b.innerHTML = '<b>' + esc(curtoEst(e)) + '</b><small>' + (p != null ? eur(p) : '—') + (ent ? '' : ' · ' + livres) + '</small>';
+      b.title = e.nome + (ent ? '' : ' — ' + livres + ' disponíveis');
+      if (!ent && livres <= 0) b.disabled = true;
+      b.onclick = () => {
+        juntar(ent ? 'entrega' : 'leva', a, 1, e.chave);
+        toast((ent ? '⬇ Entrega: ' : '⬆ Leva: ') + nomeArtigo(a) + ' ' + a.tamanho + ' (' + curtoEst(e) + ')');
+        listarA();
+      };
+      box.appendChild(b);
+    });
+    li.appendChild(box); ul.appendChild(li);
   });
 }
 
@@ -879,6 +921,11 @@ function contas() {
     if (q > (a.est[est] || 0)) falta.push(nomeArtigo(a) + ' ' + a.tamanho + ' (' + nomeEst(est) + ')');
   });
   Object.entries(CARRO.entrega).forEach(([k, q]) => {
+    const [id, est] = partes(k), a = art(id); if (!a) return;
+    const p = precoEst(a, est);
+    nE += q; tE += q * (p || 0); if (p == null) semPreco++;
+  });
+  Object.entries(CARRO.espera).forEach(([k, q]) => {
     const [sub, est] = partes(k), p = precoTipo(sub, est);
     nE += q; tE += q * (p || 0); if (p == null) semPreco++;
   });
@@ -916,10 +963,28 @@ function desenharLivros() {
 function desenharEntregas() {
   const ul = document.getElementById('lEnt');
   ul.innerHTML = '';
-  const ks = Object.keys(CARRO.entrega);
-  if (!ks.length) { ul.innerHTML = '<li class="vaziaL">Nenhuma peça.</li>'; return; }
+  const ids = Object.keys(CARRO.entrega), ks = Object.keys(CARRO.espera);
+  if (!ids.length && !ks.length) { ul.innerHTML = '<li class="vaziaL">Nenhuma peça.</li>'; return; }
+  // com tamanho → entra no stock
+  ids.forEach(k => {
+    const [id, est] = partes(k), a = art(id); if (!a) return;
+    const q = CARRO.entrega[k], p = precoEst(a, est);
+    const opcoes = estadosDe(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
+      (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><span class="stkTag">entra no stock</span>' +
+      '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
+      '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small></div>' +
+      '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
+      '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+    li.querySelector('.estSel').onchange = e => mudarEstadoLinha('entrega', k, e.target.value);
+    li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntar('entrega', a, +b.dataset.d, est));
+    li.querySelector('.tira').onclick = () => juntar('entrega', a, -q, est);
+    ul.appendChild(li);
+  });
+  // sem tamanho → sala de espera
   ks.forEach(k => {
-    const [sub, est] = partes(k), q = CARRO.entrega[k], p = precoTipo(sub, est);
+    const [sub, est] = partes(k), q = CARRO.espera[k], p = precoTipo(sub, est);
     const opcoes = estadosDe(tipoInfo(sub)).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
       (precoTipo(sub, e.chave) != null ? ' · ' + eur(precoTipo(sub, e.chave)) : '') + '</option>').join('');
     const li = document.createElement('li');
@@ -928,7 +993,7 @@ function desenharEntregas() {
       '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small></div>' +
       '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
       '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
-    li.querySelector('.estSel').onchange = e => mudarEstadoLinha('entrega', k, e.target.value);
+    li.querySelector('.estSel').onchange = e => mudarEstadoLinha('espera', k, e.target.value);
     li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntarEnt(sub, +b.dataset.d, est));
     li.querySelector('.tira').onclick = () => juntarEnt(sub, -q, est);
     ul.appendChild(li);
@@ -997,7 +1062,8 @@ function resumoAt() {
     return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est) + ')' : '') +
       ' = ' + eur(q * (precoEst(a, est) || 0)); };
   Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
-  Object.entries(CARRO.entrega).forEach(([k, q]) => { const [sub, est] = partes(k);
+  Object.entries(CARRO.entrega).forEach(([k, q]) => l.push(linha('Entrega', k, q)));
+  Object.entries(CARRO.espera).forEach(([k, q]) => { const [sub, est] = partes(k);
     l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est) : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
   LIVROS.forEach(lv => {
     ['leva', 'entrega'].forEach(dir => { const q = CARRO_LIV[dir][lv.sub];
@@ -1014,13 +1080,12 @@ function resumoAt() {
 }
 
 function limparAt() {
-  CARRO.leva = {}; CARRO.entrega = {}; CARRO_LIV.leva = {}; CARRO_LIV.entrega = {}; idPendente = null;
-  document.getElementById('pickEnt').classList.add('hidden');
+  CARRO.leva = {}; CARRO.entrega = {}; CARRO.espera = {}; CARRO_LIV.leva = {}; CARRO_LIV.entrega = {}; idPendente = null;
   pesqA.value = ''; filtroA.cat = filtroA.sub = ''; filtroA.tam = []; desenharFiltrosA(); listarA();
   tirarTalao();
 }
 document.getElementById('btnLimparAt').onclick = () => {
-  if (Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length && !confirm('Limpar este atendimento?')) return;
+  if (Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length + Object.keys(CARRO.espera).length && !confirm('Limpar este atendimento?')) return;
   limparAt();
 };
 document.getElementById('btnCopiarAt').onclick = () => {
@@ -1036,7 +1101,8 @@ document.getElementById('btnConfirmar').onclick = async () => {
   if (!idPendente) idPendente = 'A' + new Date().toISOString().replace(/\D/g, '').slice(2, 14) + '-' + Math.random().toString(36).slice(2, 5);
   const linhas = [];
   Object.entries(CARRO.leva).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'leva', qtd, estado }); });
-  Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [sub, estado] = partes(k); linhas.push({ sub, tipo: 'espera', qtd, estado }); });
+  Object.entries(CARRO.entrega).forEach(([k, qtd]) => { const [id, estado] = partes(k); linhas.push({ id, tipo: 'entrega', qtd, estado }); });
+  Object.entries(CARRO.espera).forEach(([k, qtd]) => { const [sub, estado] = partes(k); linhas.push({ sub, tipo: 'espera', qtd, estado }); });
   ['leva', 'entrega'].forEach(dir => Object.entries(CARRO_LIV[dir]).forEach(([sub, qtd]) => linhas.push({ tipo: 'livro', sub, dir, qtd })));
   try {
     const r = await api('atendimento', { idAt: idPendente, talao: TALAO ? TALAO.canhao : '', linhas });
@@ -1423,7 +1489,7 @@ document.getElementById('filtroMed').addEventListener('input', calcularMedida);
    ===================================================================== */
 const RASCUNHO = 'fardas_rascunho', VALIDADE_MS = 2 * 3600 * 1000;
 function temAtendimento() {
-  return Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length +
+  return Object.keys(CARRO.leva).length + Object.keys(CARRO.entrega).length + Object.keys(CARRO.espera).length +
     Object.keys(CARRO_LIV.leva).length + Object.keys(CARRO_LIV.entrega).length > 0 || !!TALAO;
 }
 function guardarEstado() {
@@ -1431,7 +1497,7 @@ function guardarEstado() {
   try {
     if (!temAtendimento()) { localStorage.removeItem(RASCUNHO); return; }
     localStorage.setItem(RASCUNHO, JSON.stringify({
-      t: Date.now(), leva: CARRO.leva, entrega: CARRO.entrega, liv: CARRO_LIV, talao: TALAO, idPendente
+      v: 2, t: Date.now(), leva: CARRO.leva, entrega: CARRO.entrega, espera: CARRO.espera, liv: CARRO_LIV, talao: TALAO, idPendente
     }));
   } catch (e) {}
 }
@@ -1442,7 +1508,11 @@ async function restaurarEstado() {
   if (Date.now() - (s.t || 0) > VALIDADE_MS) { try { localStorage.removeItem(RASCUNHO); } catch (e) {} return; }
   const existe = k => !!art(partes(k)[0]);
   CARRO.leva = {}; Object.entries(s.leva || {}).forEach(([k, q]) => { if (existe(k)) CARRO.leva[k] = q; });
-  CARRO.entrega = Object.assign({}, s.entrega || {});
+  CARRO.entrega = {}; CARRO.espera = {};
+  if (s.v === 2) {
+    Object.entries(s.entrega || {}).forEach(([k, q]) => { if (existe(k)) CARRO.entrega[k] = q; });
+    Object.assign(CARRO.espera, s.espera || {});
+  } else Object.assign(CARRO.espera, s.entrega || {});      // rascunho antigo: as entregas eram todas sem tamanho
   CARRO_LIV.leva = Object.assign({}, (s.liv || {}).leva || {});
   CARRO_LIV.entrega = Object.assign({}, (s.liv || {}).entrega || {});
   idPendente = s.idPendente || null;
