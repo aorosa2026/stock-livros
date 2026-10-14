@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v26</title>
+<title>Stock de Fardas v27</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -60,7 +60,7 @@
   .resMed small { display:block; color:var(--muted); margin-top:4px; }
   .tipoGrp { font-size:.78rem; color:var(--muted); margin:8px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
   .chip.addEnt { border-color:var(--acc); color:#155443; }
-  .espTag { display:inline-block; font-size:.75rem; background:#fff6db; color:#7a5a00; border-radius:999px; padding:1px 8px; margin-left:4px; }
+  .espTag { white-space:nowrap; display:inline-block; font-size:.75rem; background:#fff6db; color:#7a5a00; border-radius:999px; padding:1px 8px; margin-left:4px; }
   #listaEsp { list-style:none; padding:0; margin:0; }
   #listaEsp > li { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
   #listaEsp > li.aberto { border:2px solid var(--acc); }
@@ -108,18 +108,16 @@
   .sec-tit.leva { color:var(--leva); } .sec-tit.ent { color:var(--acc); }
   .linhas { list-style:none; padding:0; margin:0 0 14px; }
   .bloco { border-radius:12px; margin:0 0 16px; border:2px solid var(--line); overflow:hidden; background:#fff; }
-  .bloco .linhas { margin:0; padding:0 10px; }
-  .bloco > .meta { padding:0 10px; }
-  .bloco-tit { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; font-size:1.15rem; font-weight:800; letter-spacing:.03em; color:#fff; }
+  .bloco .linhas { margin:0; padding:0 8px; }
+  .bloco > .meta { padding:0 8px; }
+  .bloco-tit { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; font-size:1rem; font-weight:700; color:#fff; }
   .bloco-tit span { font-size:.85rem; font-weight:400; letter-spacing:0; text-align:right; }
   .bloco-tit small { color:inherit; opacity:.85; }
   .bloco-tit b { font-size:1rem; font-weight:800; margin-left:6px; }
   .bloco.leva { border-color:var(--leva); } .bloco.leva .bloco-tit { background:var(--leva); }
-  .bloco.leva .linhas li { border-left:4px solid var(--leva-bg); padding-left:8px; }
   .bloco.ent { border-color:var(--acc); } .bloco.ent .bloco-tit { background:var(--acc); }
-  .bloco.ent .linhas li { border-left:4px solid var(--ok); padding-left:8px; }
-  .bloco.liv { border-color:#c9b98f; } .bloco.liv .bloco-tit { background:#f3ecd9; color:#5e4b16; font-size:1rem; }
-  .bloco .linhas .nm { font-size:1.02rem; }
+  .bloco.liv { border-color:#c9b98f; } .bloco.liv .bloco-tit { background:#f3ecd9; color:#5e4b16; }
+
   .linhas li { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); }
   .linhas li:first-child { border-top:0; }
   .linhas .nm { flex:1; min-width:0; }
@@ -220,7 +218,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v26</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v27</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -303,16 +301,16 @@
 
       <div class="card">
         <section class="bloco leva">
-          <div class="bloco-tit">⬆ LEVA <span><small id="nLeva"></small> <b id="tLevaB"></b></span></div>
+          <div class="bloco-tit">⬆ Leva <span><small id="nLeva"></small> <b id="tLevaB"></b></span></div>
           <ul id="lLeva" class="linhas"></ul>
         </section>
         <section class="bloco ent">
-          <div class="bloco-tit">⬇ ENTREGA <span><small id="nEnt"></small> <b id="tEntB"></b></span></div>
+          <div class="bloco-tit">⬇ Entrega <span><small id="nEnt"></small> <b id="tEntB"></b></span></div>
           <p class="meta" style="margin:6px 0 0">Com tamanho: entra logo no stock. Sem tamanho: vai para a sala de espera ⏳.</p>
           <ul id="lEnt" class="linhas"></ul>
         </section>
         <section class="bloco liv">
-          <div class="bloco-tit">📚 LIVROS PNL / EMRC <span><small id="nLiv"></small></span></div>
+          <div class="bloco-tit">📚 Livros PNL / EMRC <span><small id="nLiv"></small></span></div>
           <ul id="lLiv" class="linhas"></ul>
         </section>
 
@@ -325,7 +323,7 @@
               <button id="btnTalao" class="btn btn-acc">Procurar</button>
             </div>
             <label class="chk"><input type="checkbox" id="talaoFech"> incluir talões esgotados ou fechados</label>
-            <a id="linkForm" class="btn hidden" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;background:#ebe7df;color:var(--ink);margin-top:8px">➕ Novo talão (formulário)</a>
+            <a id="linkForm" class="hidden" target="_blank" rel="noopener" style="display:inline-block;font-size:.85rem;color:var(--acc);margin-top:6px">➕ Novo talão (formulário)</a>
             <ul id="talaoLista"></ul>
           </div>
         </div>
@@ -551,6 +549,7 @@ function chips(idEl, valores, chave, rotuloTodos) {
       } else {
         filtro[chave] = v;
         if (chave === 'cat') { filtro.sub = ''; filtro.tam = []; }   // muda de categoria → limpa tipo e tamanho
+        document.getElementById('pesquisa').value = '';              // o que estava escrito deixava de bater certo
       }
       desenharFiltros(); filtrar();
     };
@@ -821,7 +820,7 @@ function chipsA(idEl, valores, chave, rotuloTodos) {
     b.textContent = v || rotuloTodos;
     b.onclick = () => {
       if (chave === 'tam') filtroA.tam = v === '' ? [] : filtroA.tam.includes(v) ? filtroA.tam.filter(t => t !== v) : filtroA.tam.concat(v);
-      else { filtroA[chave] = v; if (chave === 'cat') { filtroA.sub = ''; filtroA.tam = []; } }
+      else { filtroA[chave] = v; if (chave === 'cat') { filtroA.sub = ''; filtroA.tam = []; } pesqA.value = ''; }
       ABERTO_A = null; desenharFiltrosA(); listarA();
     };
     el.appendChild(b);
@@ -1092,7 +1091,7 @@ function desenharAt() {
       const li = document.createElement('li');
       li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
         '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
-        (semStock ? '<small class="erro">Só há ' + (a.est[est] || 0) + ' neste estado</small>'
+        (semStock ? '<small class="erro">⚠ só há ' + (a.est[est] || 0) + '</small>'
                   : '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small>') + '</div>' +
         '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
         '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
