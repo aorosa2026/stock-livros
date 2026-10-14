@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v27</title>
+<title>Stock de Fardas v29</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -107,6 +107,13 @@
   .sec-tit small { font-weight:400; color:var(--muted); }
   .sec-tit.leva { color:var(--leva); } .sec-tit.ent { color:var(--acc); }
   .linhas { list-style:none; padding:0; margin:0 0 14px; }
+  .linhas li.l2 { display:block; padding:7px 0; }
+  .linhas li.l2 .r1, .linhas li.l2 .r2 { display:flex; align-items:center; gap:8px; }
+  .linhas li.l2 .r1 .nmT { flex:1; min-width:0; line-height:1.25; }
+  .linhas li.l2 .r1 .sub { font-weight:700; white-space:nowrap; }
+  .linhas li.l2 .r2 { margin-top:4px; }
+  .linhas li.l2 .r2 select.estSel { flex:1; min-width:0; max-width:none; margin:0; padding:5px 4px; }
+  .linhas li.l2 small.erro { display:block; color:var(--sai); font-weight:600; font-size:.8rem; margin-top:2px; }
   .bloco { border-radius:12px; margin:0 0 16px; border:2px solid var(--line); overflow:hidden; background:#fff; }
   .bloco .linhas { margin:0; padding:0 8px; }
   .bloco > .meta { padding:0 8px; }
@@ -218,7 +225,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v27</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v29</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -1031,6 +1038,16 @@ function desenharLivros() {
   document.getElementById('nLiv').textContent = n ? n + (n === 1 ? ' livro' : ' livros') : eur(LIVROS[0].preco) + ' cada';
 }
 
+/* Linha do carrinho em 2 andares: [nome · subtotal · ✕] / [estado · − n +] */
+function linhaCarro(tituloHtml, opcoes, q, subtotal, aviso) {
+  const li = document.createElement('li'); li.className = 'l2';
+  li.innerHTML = '<div class="r1"><div class="nmT">' + tituloHtml + '</div><div class="sub">' + eur(subtotal) + '</div>' +
+    '<button class="tira" title="Tirar">✕</button></div>' +
+    '<div class="r2"><select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
+    '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div></div>' +
+    (aviso ? '<small class="erro">' + esc(aviso) + '</small>' : '');
+  return li;
+}
 function desenharEntregas() {
   const ul = document.getElementById('lEnt');
   ul.innerHTML = '';
@@ -1042,12 +1059,8 @@ function desenharEntregas() {
     const q = CARRO.entrega[k], p = precoEst(a, est);
     const opcoes = estadosDe(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
       (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
-    const li = document.createElement('li');
-    li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b><span class="stkTag">entra no stock</span>' +
-      '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
-      '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small></div>' +
-      '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
-      '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+    const li = linhaCarro(esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b> <span class="stkTag">stock</span>', opcoes, q, q * (p || 0),
+      p == null ? '⚠ sem preço' : '');
     li.querySelector('.estSel').onchange = e => mudarEstadoLinha('entrega', k, e.target.value);
     li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntar('entrega', a, +b.dataset.d, est));
     li.querySelector('.tira').onclick = () => juntar('entrega', a, -q, est);
@@ -1058,12 +1071,7 @@ function desenharEntregas() {
     const [sub, est] = partes(k), q = CARRO.espera[k], p = precoTipo(sub, est);
     const opcoes = estadosDe(tipoInfo(sub)).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' + esc(e.nome) +
       (precoTipo(sub, e.chave) != null ? ' · ' + eur(precoTipo(sub, e.chave)) : '') + '</option>').join('');
-    const li = document.createElement('li');
-    li.innerHTML = '<div class="nm">' + esc(sub) + '<span class="espTag">⏳ sem tamanho</span>' +
-      '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
-      '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small></div>' +
-      '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
-      '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+    const li = linhaCarro(esc(sub) + ' <span class="espTag">⏳ sem tam.</span>', opcoes, q, q * (p || 0), p == null ? '⚠ sem preço' : '');
     li.querySelector('.estSel').onchange = e => mudarEstadoLinha('espera', k, e.target.value);
     li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntarEnt(sub, +b.dataset.d, est));
     li.querySelector('.tira').onclick = () => juntarEnt(sub, -q, est);
@@ -1088,13 +1096,8 @@ function desenharAt() {
       const opcoes = estadosComStock(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
         esc(e.nome) + (tipo === 'leva' ? ' (' + (a.est[e.chave] || 0) + ')' : '') +
         (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
-      const li = document.createElement('li');
-      li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
-        '<select class="estSel" aria-label="Estado">' + opcoes + '</select>' +
-        (semStock ? '<small class="erro">⚠ só há ' + (a.est[est] || 0) + '</small>'
-                  : '<small>' + (p != null ? eur(p) + ' / peça' : '⚠ sem preço') + '</small>') + '</div>' +
-        '<div class="mini"><button data-d="-1">−</button><span>' + q + '</span><button data-d="1">+</button></div>' +
-        '<div class="sub">' + eur(q * (p || 0)) + '</div><button class="tira" title="Tirar">✕</button>';
+      const li = linhaCarro(esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>', opcoes, q, q * (p || 0),
+        semStock ? '⚠ só há ' + (a.est[est] || 0) + ' neste estado' : p == null ? '⚠ sem preço' : '');
       li.querySelector('.estSel').onchange = e => mudarEstadoLinha(tipo, k, e.target.value);
       li.querySelectorAll('.mini button').forEach(b => b.onclick = () => juntar(tipo, a, +b.dataset.d, est));
       li.querySelector('.tira').onclick = () => juntar(tipo, a, -q, est);
@@ -1114,7 +1117,8 @@ function desenharAt() {
     s.className = 'saldo' + (ct.pagar > 0 ? ' pagar' : ' credito');
     s.innerHTML = '<small>' + (ct.pagar > 0 ? 'A pagar em dinheiro' : 'Nada a pagar') + '</small>' + eur(ct.pagar) +
       '<div class="conta">Talão ' + esc(TALAO.canhao) + ': ' + eur(TALAO.saldo) + (c.tE ? ' + ' + eur(c.tE) : '') +
-      (c.tL ? ' − ' + eur(ct.usado) : '') + ' → fica com <b>' + eur(ct.fica) + '</b></div>';
+      (c.tL ? ' − ' + eur(ct.usado) : '') + ' → fica com <b>' + eur(ct.fica) + '</b>' +
+      (ct.fica <= 0 && (ct.usado || c.tE) ? ' · <b>o talão fecha</b>' : '') + '</div>';
   } else {
     s.className = 'saldo' + (c.saldo > 0 ? ' pagar' : c.saldo < 0 ? ' credito' : '');
     s.innerHTML = '<small>' + (c.saldo > 0 ? 'A pagar' : c.saldo < 0 ? 'Crédito a favor' : 'Total') + '</small>' + eur(Math.abs(c.saldo));
@@ -1146,7 +1150,8 @@ function resumoAt() {
   });
   const ct = contasTalao(c);
   if (ct) {
-    l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica));
+    l.push('Talão ' + TALAO.canhao + ' (' + TALAO.encarregado + '): saldo ' + eur(TALAO.saldo) + ' → fica ' + eur(ct.fica) +
+      (ct.fica <= 0 && (ct.usado || c.tE) ? ' (o talão fica FECHADO)' : ''));
     l.push('A pagar em dinheiro: ' + eur(ct.pagar));
   } else {
     l.push((c.saldo > 0 ? 'A pagar: ' : c.saldo < 0 ? 'Crédito a favor: ' : 'Total: ') + eur(Math.abs(c.saldo)));
@@ -1186,7 +1191,7 @@ document.getElementById('btnConfirmar').onclick = async () => {
     contarEspera();
     if (r.repetido) toast('✔ Já estava gravado.');
     else if (r.talao) toast('✔ Gravado. ' + (r.pagar ? 'Paga ' + eur(r.pagar) + ' em dinheiro. ' : 'Nada a pagar. ') +
-      'Talão ' + r.talao.canhao + ' fica com ' + eur(r.talao.saldoFinal) + '.');
+      'Talão ' + r.talao.canhao + (r.talao.fechado ? ' ficou a 0 € e foi FECHADO.' : ' fica com ' + eur(r.talao.saldoFinal) + '.'));
     else toast('✔ Gravado. ' + (r.saldo > 0 ? 'A pagar ' + eur(r.saldo) : r.saldo < 0 ? 'Crédito ' + eur(-r.saldo) + ' (sem talão)' : ''));
     carregarHist();
   } catch (e) {
