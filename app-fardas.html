@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v20</title>
+<title>Stock de Fardas v21</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -78,7 +78,7 @@
   .tabPrecos { width:100%; border-collapse:collapse; font-size:.85rem; background:#fff; }
   .tabPrecos th, .tabPrecos td { border:1px solid var(--line); padding:5px 4px; text-align:center; white-space:nowrap; }
   .tabPrecos th:first-child, .tabPrecos td:first-child { text-align:left; white-space:normal; }
-  .tabPrecos th { background:var(--bg); font-weight:600; }
+  .tabPrecos th { background:var(--bg); font-weight:600; position:sticky; top:0; z-index:2; box-shadow:0 1px 0 var(--line); }
   .tabPrecos tr.grp td { background:#f4f1ea; font-weight:700; text-align:left; }
   .tabPrecos td.na { color:#bbb; }
   .legenda { font-size:.8rem; color:var(--muted); margin-top:8px; line-height:1.5; }
@@ -178,7 +178,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v20</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v21</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -577,13 +577,21 @@ function normalizarArtigo(a) {
   if (!a.precos) { a.precos = {}; ESTADOS.forEach(e => a.precos[e.chave] = a.preco); }
   a.stock = ESTADOS.reduce((s, e) => s + (a.est[e.chave] || 0), 0);
 }
-const estadosDe = a => (a && a.soBoa) ? ESTADOS.filter(e => e.chave === 'Boa') : ESTADOS;   // sapatilhas: só "Boa"
+// Estados que se aplicam a uma peça/tipo (folha Tipos); sem regra = todos
+const estadosDe = a => {
+  if (!a || !a.estadosOk) return ESTADOS;
+  const l = ESTADOS.filter(e => a.estadosOk.includes(e.chave));
+  return l.length ? l : ESTADOS.filter(e => e.chave === 'Boa');
+};
+const vendiveis = () => ARTIGOS.filter(a => a.vende !== false);
+// Na ficha e no "Leva" mostra também estados desligados que ainda têm peças (para lhes poder dar saída)
+const estadosComStock = a => ESTADOS.filter(e => estadosDe(a).includes(e) || (a.est && (a.est[e.chave] || 0) > 0));
 const nomeEst = k => (ESTADOS.find(e => e.chave === k) || { nome: k }).nome;
 const precoEst = (a, k) => a.precos ? a.precos[k] : a.preco;
 
 function mostrar(a) {
   atual = a; qtd = 1; motivo = '';
-  if (a.soBoa || !ESTADOS.some(e => e.chave === estSel)) estSel = 'Boa';
+  if (!estadosDe(a).some(e => e.chave === estSel)) estSel = estadosDe(a)[0].chave;
   const f = document.getElementById('ficha');
   f.innerHTML =
     '<button class="fechar" id="fechar" aria-label="Fechar">✕</button>' +
@@ -621,12 +629,12 @@ function desenharEstadosFicha() {
   const a = atual, el = document.getElementById('estados');
   if (!el) return;
   el.innerHTML = '';
-  estadosDe(a).forEach(e => {
+  estadosComStock(a).forEach(e => {
     const b = document.createElement('button');
     const n = a.est[e.chave] || 0;
     b.className = 'est' + (estSel === e.chave ? ' sel' : '') + (n ? '' : ' vazio');
     b.innerHTML = '<b>' + n + '</b> ' + esc(e.nome) +
-      '<small>' + (precoEst(a, e.chave) != null ? eur(precoEst(a, e.chave)) : 'sem preço') + '</small>';
+      '<small>' + (a.vende === false ? 'não se vende' : precoEst(a, e.chave) != null ? eur(precoEst(a, e.chave)) : 'sem preço') + '</small>';
     b.onclick = () => { estSel = e.chave; desenharEstadosFicha(); };
     el.appendChild(b);
   });
@@ -635,6 +643,7 @@ function desenharEstadosFicha() {
 }
 
 async function movimentar(sinal) {
+  if (sinal > 0 && !estadosDe(atual).some(e => e.chave === estSel)) { toast('Este estado não se aplica a esta peça (folha Tipos). Só dá para dar saída.'); return; }
   const noEstado = atual.est[estSel] || 0;
   if (sinal < 0 && qtd > noEstado) { toast('Só há ' + noEstado + ' em "' + nomeEst(estSel) + '".'); return; }
   const botoes = [document.getElementById('btnEnt'), document.getElementById('btnSai')];
@@ -667,7 +676,7 @@ const partes = k => { const i = k.lastIndexOf('|'); return [k.slice(0, i), k.sli
    quem leva → o primeiro estado que ainda tem peças disponíveis */
 function estadoPorDefeito(tipo, a) {
   if (tipo === 'entrega') return 'Boa';
-  const e = estadosDe(a).find(e => disponivel(a, e.chave) > 0);
+  const e = estadosComStock(a).find(e => disponivel(a, e.chave) > 0);
   return e ? e.chave : 'Boa';
 }
 function disponivel(a, est) {
@@ -677,7 +686,7 @@ function disponivel(a, est) {
 /* Entregas: só tipo de peça + estado (sem tamanho). CARRO.entrega = { 'Tipo|Estado': qtd } */
 function tiposDePeca() {
   const m = {};
-  ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco, soBoa: !!a.soBoa }; });
+  ARTIGOS.forEach(a => { if (a.subcategoria && !m[a.subcategoria]) m[a.subcategoria] = { tipo: a.subcategoria, grupo: a.categoria, precos: a.precos, preco: a.preco, estadosOk: a.estadosOk, vende: a.vende !== false }; });
   return Object.values(m).sort((x, y) => x.grupo.localeCompare(y.grupo, 'pt') || x.tipo.localeCompare(y.tipo, 'pt'));
 }
 const tipoInfo = sub => tiposDePeca().find(t => t.tipo === sub);
@@ -695,7 +704,7 @@ document.getElementById('btnAddEnt').onclick = () => {
   if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
   box.innerHTML = '';
   let grp = '';
-  tiposDePeca().forEach(t => {
+  tiposDePeca().filter(t => t.vende).forEach(t => {
     if (t.grupo !== grp) {
       grp = t.grupo;
       const h = document.createElement('div'); h.className = 'tipoGrp'; h.textContent = grp; box.appendChild(h);
@@ -728,15 +737,17 @@ function mudarEstadoLinha(tipo, k, novo) {
 }
 
 document.getElementById('scanLeva').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
-  const a = artigoDoQR(t); if (a) { juntar('leva', a); toast('⬆ Leva: ' + nomeArtigo(a) + ' ' + a.tamanho); } });
+  const a = artigoDoQR(t); if (!a) return;
+  if (a.vende === false) { toast(nomeArtigo(a) + ': não se vende (não entra no atendimento).'); return; }
+  juntar('leva', a); toast('⬆ Leva: ' + nomeArtigo(a) + ' ' + a.tamanho); });
 
 /* Pesquisa no atendimento: cada resultado tem botões Leva / Entrega */
 const pesqA = document.getElementById('pesqA');
 /* Filtros do atendimento (iguais aos do Inventário, mas independentes) */
 const filtroA = { cat: '', sub: '', tam: [] };
 function desenharFiltrosA() {
-  const cats = unicos(ARTIGOS.map(a => a.categoria));
-  const doCat = ARTIGOS.filter(a => !filtroA.cat || a.categoria === filtroA.cat);
+  const cats = unicos(vendiveis().map(a => a.categoria));
+  const doCat = vendiveis().filter(a => !filtroA.cat || a.categoria === filtroA.cat);
   const subs = filtroA.cat ? unicos(doCat.map(a => a.subcategoria)) : [];
   if (!subs.includes(filtroA.sub)) filtroA.sub = '';
   const doSub = doCat.filter(a => !filtroA.sub || a.subcategoria === filtroA.sub);
@@ -771,7 +782,7 @@ function listarA() {
   ul.innerHTML = ''; cont.textContent = '';
   const palavras = semAcentos(pesqA.value.trim()).split(/\s+/).filter(Boolean);
   if (!palavras.length && !filtroA.cat && !filtroA.sub && !filtroA.tam.length) return;
-  const res = ARTIGOS.filter(a =>
+  const res = vendiveis().filter(a =>
     (!filtroA.cat || a.categoria === filtroA.cat) &&
     (!filtroA.sub || a.subcategoria === filtroA.sub) &&
     (!filtroA.tam.length || filtroA.tam.includes(a.tamanho)) &&
@@ -936,7 +947,7 @@ function desenharAt() {
       const [id, est] = partes(k), a = art(id); if (!a) return;
       const q = CARRO[tipo][k], p = precoEst(a, est);
       const semStock = tipo === 'leva' && q > (a.est[est] || 0);
-      const opcoes = estadosDe(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
+      const opcoes = estadosComStock(a).map(e => '<option value="' + esc(e.chave) + '"' + (e.chave === est ? ' selected' : '') + '>' +
         esc(e.nome) + (tipo === 'leva' ? ' (' + (a.est[e.chave] || 0) + ')' : '') +
         (precoEst(a, e.chave) != null ? ' · ' + eur(precoEst(a, e.chave)) : '') + '</option>').join('');
       const li = document.createElement('li');
@@ -1367,18 +1378,18 @@ document.getElementById('btnTabelas').onclick = () => {
 /* Tabela de preços por tipo de peça e estado (só consulta) */
 function htmlPrecos() {
   const cod = e => (e.nome.match(/^(\S+\s)?(C\d+)/) || [, '', e.cod || ''])[0].trim() || e.chave;
-  const tipos = tiposDePeca();
+  const tipos = tiposDePeca().filter(t => t.vende);
   if (!tipos.length) return '<p class="meta">Sem peças.</p>';
   let html = '<table class="tabPrecos"><tr><th>Peça</th>' + ESTADOS.map(e => '<th>' + esc(cod(e)) + '</th>').join('') + '</tr>', grp = null;
   tipos.forEach(t => {
     if (t.grupo !== grp) { grp = t.grupo; html += '<tr class="grp"><td colspan="' + (ESTADOS.length + 1) + '">' + esc(grp) + '</td></tr>'; }
     html += '<tr><td>' + esc(t.tipo) + '</td>' + ESTADOS.map(e => {
       const p = t.precos ? t.precos[e.chave] : t.preco;
-      return (t.soBoa && e.chave !== 'Boa') || p == null ? '<td class="na">—</td>' : '<td>' + eur(p) + '</td>';
+      return (t.estadosOk && !t.estadosOk.includes(e.chave)) || p == null ? '<td class="na">—</td>' : '<td>' + eur(p) + '</td>';
     }).join('') + '</tr>';
   });
   if (LIVROS.length) html += '<tr class="grp"><td colspan="' + (ESTADOS.length + 1) + '">Livros PNL / EMRC: ' + eur(LIVROS[0].preco) + ' cada</td></tr>';
-  html += '</table><div class="legenda">' + ESTADOS.map(e => esc(e.nome)).join('<br>') + '<br>— = não se aplica (ex.: sapatilhas só “Boa”) ou sem preço</div>';
+  html += '</table><div class="legenda">' + ESTADOS.map(e => esc(e.nome)).join('<br>') + '<br>— = estado que não se aplica a essa peça (folha Tipos) ou sem preço</div>';
   return html;
 }
 document.getElementById('btnPrecos').onclick = () => {
