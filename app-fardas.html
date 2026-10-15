@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v33</title>
+<title>Stock de Fardas v34</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -44,6 +44,8 @@
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 13px; font-size:.92rem; cursor:pointer; color:var(--ink); }
   .chip.sel { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .chip.semTam { background:#fff6db; border-color:#e6cf8a; color:#7a5a00; }
+  .chip.semTam.sel { background:#b8860b; border-color:#b8860b; color:#fff; }
 
   #resultados { list-style:none; padding:0; margin:10px 0 0; }
   #resultados li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
@@ -225,7 +227,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v33</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v34</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -293,12 +295,12 @@
     <!-- Separador: Atendimento -->
     <div id="tabAt" class="hidden">
       <div class="modoAt" id="modoAt">
-        <button data-m="leva" class="leva sel">⬆ Leva</button>
-        <button data-m="entrega" class="ent">⬇ Entrega</button>
+        <button data-m="leva" class="leva sel">⬆ Saídas</button>
+        <button data-m="entrega" class="ent">⬇ Entradas</button>
       </div>
-      <button id="scanA" class="btn btn-leva">📷 Ler QR da peça que leva</button>
+      <button id="scanA" class="btn btn-leva">📷 Ler QR da peça que sai</button>
       <div id="leitorA" style="margin-top:10px;border-radius:12px;overflow:hidden"></div>
-      <input id="pesqA" type="search" placeholder="Leva: procura polo 8, saia 10…" autocomplete="off">
+      <input id="pesqA" type="search" placeholder="Saídas: procura polo 8, saia 10…" autocomplete="off">
       <div class="filtro-tit">Categoria</div>
       <div class="chips" id="fCatA"></div>
       <div id="blocoSubA" class="hidden"><div class="filtro-tit">Tipo de peça</div><div class="chips" id="fSubA"></div></div>
@@ -308,11 +310,11 @@
 
       <div class="card">
         <section class="bloco leva">
-          <div class="bloco-tit">⬆ Leva <span><small id="nLeva"></small> <b id="tLevaB"></b></span></div>
+          <div class="bloco-tit">⬆ Saídas <span><small id="nLeva"></small> <b id="tLevaB"></b></span></div>
           <ul id="lLeva" class="linhas"></ul>
         </section>
         <section class="bloco ent">
-          <div class="bloco-tit">⬇ Entrega <span><small id="nEnt"></small> <b id="tEntB"></b></span></div>
+          <div class="bloco-tit">⬇ Entradas <span><small id="nEnt"></small> <b id="tEntB"></b></span></div>
           <p class="meta" style="margin:6px 0 0">Com tamanho: entra logo no stock. Sem tamanho: vai para a sala de espera ⏳.</p>
           <ul id="lEnt" class="linhas"></ul>
         </section>
@@ -335,7 +337,7 @@
           </div>
         </div>
 
-        <div class="tot3"><span>Leva: <b id="tLeva">0,00 €</b></span><span>Entrega: <b id="tEnt">0,00 €</b></span></div>
+        <div class="tot3"><span>Saídas: <b id="tLeva">0,00 €</b></span><span>Entradas: <b id="tEnt">0,00 €</b></span></div>
         <div id="saldo" class="saldo"><small>Total</small>0,00 €</div>
         <div id="avisoAt" class="aviso hidden"></div>
 
@@ -792,9 +794,9 @@ function mudarModoAt(m) {
   document.querySelectorAll('#modoAt button').forEach(b => b.classList.toggle('sel', b.dataset.m === m));
   const sc = document.getElementById('scanA');
   sc.className = 'btn ' + (m === 'leva' ? 'btn-leva' : 'btn-ent');
-  if (!scanner) sc.textContent = m === 'leva' ? '📷 Ler QR da peça que leva' : '📷 Ler QR da peça que entrega';
-  pesqA.placeholder = m === 'leva' ? 'Leva: procura polo 8, saia 10…' : 'Entrega: procura polo 8, saia…';
-  ABERTO_A = null; listarA();
+  if (!scanner) sc.textContent = m === 'leva' ? '📷 Ler QR da peça que sai' : '📷 Ler QR da peça que entra';
+  pesqA.placeholder = m === 'leva' ? 'Saídas: procura polo 8, saia 10…' : 'Entradas: procura polo 8, saia…';
+  ABERTO_A = null; filtroA.tam = filtroA.tam.filter(t => t !== SEM_TAM); desenharFiltrosA(); listarA();
 }
 document.querySelectorAll('#modoAt button').forEach(b => b.onclick = () => mudarModoAt(b.dataset.m));
 // O QR mostra a peça na lista, com os botões dos estados para escolher
@@ -803,7 +805,7 @@ document.getElementById('scanA').onclick = e => iniciarLeitor('leitorA', e.curre
   if (a.vende === false) { toast(nomeArtigo(a) + ': não se vende (não entra no atendimento).'); return; }
   filtroA.cat = filtroA.sub = ''; filtroA.tam = []; desenharFiltrosA();
   pesqA.value = a.id; ABERTO_A = a.id; listarA();
-  toast((MODO_AT === 'leva' ? '⬆ Leva: ' : '⬇ Entrega: ') + nomeArtigo(a) + ' ' + a.tamanho + ' — escolhe o estado');
+  toast((MODO_AT === 'leva' ? '⬆ Saída: ' : '⬇ Entrada: ') + nomeArtigo(a) + ' ' + a.tamanho + ' — escolhe o estado');
 });
 const curtoEst = e => String(e.nome).split(' · ')[0];
 
@@ -811,6 +813,7 @@ const curtoEst = e => String(e.nome).split(' · ')[0];
 const pesqA = document.getElementById('pesqA');
 /* Filtros do atendimento (iguais aos do Inventário, mas independentes) */
 const filtroA = { cat: '', sub: '', tam: [] };
+const SEM_TAM = 's/ tam.';   // botão dos tamanhos nas Entradas: peça sem tamanho → sala de espera
 function desenharFiltrosA() {
   const cats = unicos(vendiveis().map(a => a.categoria));
   const doCat = vendiveis().filter(a => !filtroA.cat || a.categoria === filtroA.cat);
@@ -818,10 +821,10 @@ function desenharFiltrosA() {
   if (!subs.includes(filtroA.sub)) filtroA.sub = '';
   const doSub = doCat.filter(a => !filtroA.sub || a.subcategoria === filtroA.sub);
   const tams = unicos(doSub.map(a => a.tamanho)).sort(ordTam);
-  filtroA.tam = filtroA.tam.filter(t => tams.includes(t));
+  filtroA.tam = filtroA.tam.filter(t => tams.includes(t) || (t === SEM_TAM && MODO_AT === 'entrega'));
   chipsA('fCatA', cats, 'cat', 'Todas');
   chipsA('fSubA', subs, 'sub', 'Todos');
-  chipsA('fTamA', tams, 'tam', 'Todos');
+  chipsA('fTamA', MODO_AT === 'entrega' ? tams.concat(SEM_TAM) : tams, 'tam', 'Todos');
   document.getElementById('blocoSubA').classList.toggle('hidden', !subs.length);
   document.getElementById('blocoTamA').classList.toggle('hidden', !tams.length || (!filtroA.cat && !filtroA.sub));
 }
@@ -831,10 +834,14 @@ function chipsA(idEl, valores, chave, rotuloTodos) {
   [''].concat(valores).forEach(v => {
     const b = document.createElement('button');
     const sel = chave === 'tam' ? (v === '' ? !filtroA.tam.length : filtroA.tam.includes(v)) : filtroA[chave] === v;
-    b.className = 'chip' + (sel ? ' sel' : '');
+    b.className = 'chip' + (sel ? ' sel' : '') + (v === SEM_TAM ? ' semTam' : '');
     b.textContent = v || rotuloTodos;
     b.onclick = () => {
-      if (chave === 'tam') filtroA.tam = v === '' ? [] : filtroA.tam.includes(v) ? filtroA.tam.filter(t => t !== v) : filtroA.tam.concat(v);
+      if (chave === 'tam') {
+        filtroA.tam = v === '' ? [] : filtroA.tam.includes(v) ? filtroA.tam.filter(t => t !== v) : filtroA.tam.concat(v);
+        // s/ tam. com um tipo de peça escolhido → abre logo a janelinha "sem tamanho" desse tipo
+        if (v === SEM_TAM && filtroA.tam.includes(SEM_TAM) && filtroA.sub) { ABERTO_A = 'esp:' + filtroA.sub; desenharFiltrosA(); listarA(); return; }
+      }
       else { filtroA[chave] = v; if (chave === 'cat') { filtroA.sub = ''; filtroA.tam = []; } pesqA.value = ''; }
       ABERTO_A = null; desenharFiltrosA(); listarA();
     };
@@ -849,20 +856,21 @@ function listarA() {
   const palavras = semAcentos(pesqA.value.trim()).split(/\s+/).filter(Boolean);
   if (!palavras.length && !filtroA.cat && !filtroA.sub && !filtroA.tam.length) return;
   const ent = MODO_AT === 'entrega';
+  const tamReais = filtroA.tam.filter(t => t !== SEM_TAM), soSemTam = ent && filtroA.tam.includes(SEM_TAM) && !tamReais.length;
   const res = vendiveis().filter(a =>
     (!filtroA.cat || a.categoria === filtroA.cat) &&
     (!filtroA.sub || a.subcategoria === filtroA.sub) &&
-    (!filtroA.tam.length || filtroA.tam.includes(a.tamanho)) &&
+    (!tamReais.length || tamReais.includes(a.tamanho)) &&
     palavras.every(p => semAcentos([a.id, a.categoria, a.subcategoria, a.tamanho, a.descricao].join(' ')).includes(p)))
     .sort((x, y) => x.subcategoria.localeCompare(y.subcategoria, 'pt') || ordTam(x.tamanho, y.tamanho));
-  const tiposEsp = ent && !filtroA.tam.length ? unicos(res.map(a => a.subcategoria)).map(tipoInfo).filter(t => t && t.vende).slice(0, 4) : [];
+  const tiposEsp = ent && (!tamReais.length || filtroA.tam.includes(SEM_TAM)) ? unicos(res.map(a => a.subcategoria)).map(tipoInfo).filter(t => t && t.vende).slice(0, soSemTam ? 20 : 4) : [];
 
   // Uma peça aberta: só essa, com os estados; as outras escondem-se
   if (ABERTO_A) {
     const esp = ABERTO_A.startsWith('esp:') ? tipoInfo(ABERTO_A.slice(4)) : null;
     const a = esp ? null : art(ABERTO_A);
     if (esp || a) {
-      const n = res.length + tiposEsp.length;
+      const n = (soSemTam ? 0 : res.length) + tiposEsp.length;
       const v = document.createElement('button'); v.className = 'voltarA';
       v.textContent = n > 1 ? '← voltar à lista (' + n + ')' : '✕ fechar';
       v.onclick = () => { ABERTO_A = null; if (n <= 1) pesqA.value = ''; listarA(); };
@@ -881,12 +889,13 @@ function listarA() {
     li.onclick = () => { ABERTO_A = 'esp:' + t.tipo; listarA(); };
     ul.appendChild(li);
   });
+  if (soSemTam) { cont.textContent = tiposEsp.length ? 'Sem tamanho → sala de espera' : 'Escolhe o tipo de peça'; return; }
   cont.textContent = res.length + (res.length === 1 ? ' peça' : ' peças') + (res.length > 60 ? ' (a mostrar 60 — escolhe um tipo ou tamanho)' : '');
   res.slice(0, 60).forEach(a => {
     const li = document.createElement('li'); li.className = 'item';
     const p = precoEst(a, 'Boa'), noC = qtdNoCarro(ent ? 'entrega' : 'leva', a.id);
     li.innerHTML = '<div class="nm">' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
-      (noC ? ' <span class="stkTag">' + noC + ' no ' + (ent ? 'entrega' : 'leva') + '</span>' : '') +
+      (noC ? ' <span class="stkTag">' + noC + ' ' + (ent ? 'a entrar' : 'a sair') + '</span>' : '') +
       '<small>' + (p != null ? eur(p) : 'sem preço') + ' · stock ' + a.stock +
       (a.stock !== (a.est.Boa || 0) ? ' (' + (a.est.Boa || 0) + ' boas)' : '') + '</small></div><span class="seta">›</span>';
     li.onclick = () => { ABERTO_A = a.id; listarA(); };
@@ -899,14 +908,14 @@ const qtdNoCarro = (tipo, id) => Object.entries(CARRO[tipo]).reduce((n, [k, q]) 
 function painelPeca(a, ent) {
   const tipo = ent ? 'entrega' : 'leva';
   const li = document.createElement('li'); li.className = 'aberto ' + (ent ? 'ent' : 'leva');
-  li.innerHTML = '<div class="nm"><b>' + (ent ? '⬇ Entrega: ' : '⬆ Leva: ') + '</b>' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
+  li.innerHTML = '<div class="nm"><b>' + (ent ? '⬇ Entrada: ' : '⬆ Saída: ') + '</b>' + esc(nomeArtigo(a)) + ' <b>· ' + esc(a.tamanho) + '</b>' +
     (ent ? ' <span class="stkTag">entra no stock</span>' : '') + '<small>Toca no estado (cada toque junta 1). As quantidades acertam-se em baixo.</small></div>';
   const box = document.createElement('div'); box.className = 'painelEst';
   (ent ? estadosDe(a) : estadosComStock(a)).forEach(e => {
     const p = precoEst(a, e.chave), livres = disponivel(a, e.chave), q = CARRO[tipo][chaveC(a.id, e.chave)] || 0;
     const b = document.createElement('button'); b.className = 'estL';
     b.innerHTML = '<span class="noC' + (q ? '' : ' zero') + '">' + (q ? q + '×' : '+') + '</span>' +
-      '<span class="nmE">' + esc(e.nome) + '<small>' + (ent ? 'em stock: ' + (a.est[e.chave] || 0) : livres > 0 ? 'disponíveis: ' + livres : '<span class="semStk">' + (q ? 'já estão todas no leva' : 'sem stock registado') + ' — conta só para as contas</span>') + '</small></span>' +
+      '<span class="nmE">' + esc(e.nome) + '<small>' + (ent ? 'em stock: ' + (a.est[e.chave] || 0) : livres > 0 ? 'disponíveis: ' + livres : '<span class="semStk">' + (q ? 'já estão todas nas saídas' : 'sem stock registado') + ' — conta só para as contas</span>') + '</small></span>' +
       '<span class="pr">' + (p != null ? eur(p) : '—') + '</span>';
     if (!ent && livres <= 0) b.classList.add('vazio');
     b.onclick = () => { juntar(tipo, a, 1, e.chave); toast((ent ? '⬇ ' : '⬆ ') + nomeArtigo(a) + ' ' + a.tamanho + ' · ' + curtoEst(e)); listarA(); };
@@ -917,7 +926,7 @@ function painelPeca(a, ent) {
 }
 function painelSemTamanho(t) {
   const li = document.createElement('li'); li.className = 'aberto ent';
-  li.innerHTML = '<div class="nm"><b>⬇ Entrega: </b>' + esc(t.tipo) + ' <span class="espTag">⏳ sem tamanho</span>' +
+  li.innerHTML = '<div class="nm"><b>⬇ Entrada: </b>' + esc(t.tipo) + ' <span class="espTag">⏳ sem tamanho</span>' +
     '<small>Vai para a sala de espera e é inventariada depois. Toca no estado (cada toque junta 1).</small></div>';
   const box = document.createElement('div'); box.className = 'painelEst';
   estadosDe(t).forEach(e => {
@@ -1029,7 +1038,7 @@ function desenharLivros() {
   ul.innerHTML = '';
   let n = 0;
   LIVROS.forEach(lv => {
-    [['leva', '⬆ Leva'], ['entrega', '⬇ Entrega']].forEach(([dir, rot]) => {
+    [['leva', '⬆ Saída'], ['entrega', '⬇ Entrada']].forEach(([dir, rot]) => {
       const q = CARRO_LIV[dir][lv.sub] || 0; n += q;
       const li = document.createElement('li');
       li.innerHTML = '<div class="nm"><b>' + rot + '</b><small>' + eur(lv.preco) + ' / livro</small></div>' +
@@ -1148,13 +1157,13 @@ function resumoAt() {
   const linha = (t, k, q) => { const [id, est] = partes(k), a = art(id);
     return t + ' ' + q + '× ' + nomeArtigo(a) + ' ' + a.tamanho + (est !== 'Boa' ? ' (' + nomeEst(est) + ')' : '') +
       ' = ' + eur(q * (precoEst(a, est) || 0)); };
-  Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Leva', k, q)));
-  Object.entries(CARRO.entrega).forEach(([k, q]) => l.push(linha('Entrega', k, q)));
+  Object.entries(CARRO.leva).forEach(([k, q]) => l.push(linha('Saída', k, q)));
+  Object.entries(CARRO.entrega).forEach(([k, q]) => l.push(linha('Entrada', k, q)));
   Object.entries(CARRO.espera).forEach(([k, q]) => { const [sub, est] = partes(k);
-    l.push('Entrega ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est) : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
+    l.push('Entrada ' + q + '× ' + sub + ' (sem tamanho' + (est !== 'Boa' ? ', ' + nomeEst(est) : '') + ') = ' + eur(q * (precoTipo(sub, est) || 0))); });
   LIVROS.forEach(lv => {
     ['leva', 'entrega'].forEach(dir => { const q = CARRO_LIV[dir][lv.sub];
-      if (q) l.push((dir === 'leva' ? 'Leva ' : 'Entrega ') + q + '× livro = ' + eur(q * lv.preco)); });
+      if (q) l.push((dir === 'leva' ? 'Saída ' : 'Entrada ') + q + '× livro = ' + eur(q * lv.preco)); });
   });
   const ct = contasTalao(c);
   if (ct) {
@@ -1307,6 +1316,7 @@ function painelEspera(e) {
       (marcas.length ? '<div class="chips mMarca"></div>' : '') +
       '<input class="mCm" type="text" inputmode="decimal" placeholder="comprimento em cm" style="margin-top:6px">' +
       '<div class="mRes meta" style="margin-top:4px"></div>' : '') +
+    '<div class="filtro-tit">Estado</div><div class="chips mEst"></div>' +
     '<div class="filtro-tit">Tamanho</div><div class="chips mTam"></div>' +
     '<button class="btn btn-acc mOk" style="margin-top:10px" disabled>Escolhe o tamanho</button>' +
     '<details class="naoInv" style="margin-top:12px"><summary class="link vermelho" style="cursor:pointer">Não entra no stock…</summary>' +
@@ -1316,11 +1326,22 @@ function painelEspera(e) {
     '</details>';
 
   const ok = box.querySelector('.mOk');
+  let estE = e.estado || 'Boa';
+  const zEst = box.querySelector('.mEst');
+  const estOk = estadosDe(tipoInfo(e.tipo)).slice();
+  if (!estOk.some(x => x.chave === estE)) estOk.push(ESTADOS.find(x => x.chave === estE) || { chave: estE, nome: estE });
+  estOk.forEach(x => {
+    const b = document.createElement('button'); b.className = 'chip'; b.dataset.k = x.chave; b.textContent = curtoEst(x); b.title = x.nome;
+    b.onclick = () => { estE = x.chave; pintar(); };
+    zEst.appendChild(b);
+  });
   const pintar = () => {
     box.querySelectorAll('.mTam .chip').forEach(c => c.classList.toggle('sel', c.textContent === escolhido));
+    zEst.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c.dataset.k === estE));
     ok.disabled = !escolhido;
-    ok.textContent = escolhido ? '✔ Inventariar no tamanho ' + escolhido : 'Escolhe o tamanho';
+    ok.textContent = escolhido ? '✔ Inventariar: tamanho ' + escolhido + ' · ' + curtoEst(ESTADOS.find(x => x.chave === estE) || { nome: estE }) : 'Escolhe o tamanho';
   };
+  pintar();
   const zt = box.querySelector('.mTam');
   if (!tamanhos.length) zt.innerHTML = '<span class="meta">Não há linhas de ' + esc(e.tipo) + ' no Inventario.</span>';
   tamanhos.forEach(t => {
@@ -1386,11 +1407,11 @@ function painelEspera(e) {
   ok.onclick = async () => {
     ok.disabled = true; ok.textContent = 'A gravar…';
     try {
-      const r = await api('inventariar', { idE: e.idE, tamanho: escolhido });
+      const r = await api('inventariar', { idE: e.idE, tamanho: escolhido, estado: estE });
       atualizarStocks(r.stocks);
       ESPERA = ESPERA.filter(x => x.idE !== e.idE); espAberta = null;
       document.getElementById('nEsp').textContent = ESPERA.length ? '(' + ESPERA.length + ')' : '';
-      toast('✔ ' + e.tipo + ' ' + escolhido + ' (' + nomeEst(e.estado) + ') → stock (' + r.codigo + ')');
+      toast('✔ ' + e.tipo + ' ' + escolhido + ' (' + nomeEst(estE) + ') → stock (' + r.codigo + ')');
       desenharEspera();
     } catch (err) { toast('Erro: ' + err.message); pintar(); }
   };
