@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v35</title>
+<title>Stock de Fardas v36</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -229,7 +229,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v35</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v36</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -259,6 +259,7 @@
       <p id="carregar" class="meta">A carregar lista…</p>
       <p class="meta"><a id="linkQR" target="_blank" rel="noopener">🖨 Imprimir etiquetas QR</a></p>
       <p class="meta" style="margin-top:-6px"><a id="linkPrecario" target="_blank" rel="noopener">💶 Imprimir preçário</a></p>
+      <p class="meta" style="margin-top:-6px"><a id="linkSemTam" target="_blank" rel="noopener">⏳ Imprimir QR sem tamanho (1 folha)</a></p>
     </div>
 
     <!-- Separador: Espera -->
@@ -454,6 +455,7 @@ async function irPara(tab) {
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => irPara(b.dataset.tab));
 document.getElementById('linkQR').href = API_URL + '?action=folhaqr';
 document.getElementById('linkPrecario').href = API_URL + '?action=precario';
+document.getElementById('linkSemTam').href = API_URL + '?action=qrsemtam';
 
 /* ---------- Leitura QR em direto ---------- */
 /* Um só leitor para os dois separadores: elId = onde aparece a câmara, aoLer = o que fazer com o texto */
