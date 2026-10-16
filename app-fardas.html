@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v34</title>
+<title>Stock de Fardas v35</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -44,6 +44,8 @@
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 13px; font-size:.92rem; cursor:pointer; color:var(--ink); }
   .chip.sel { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .extraT { border:1px solid var(--line); background:#fff; border-radius:999px; padding:1px 7px; font-size:.9rem; cursor:pointer; margin-left:2px; }
+  .extraT.aberto { background:#fff6db; border-color:#e6cf8a; }
   .chip.semTam { background:#fff6db; border-color:#e6cf8a; color:#7a5a00; }
   .chip.semTam.sel { background:#b8860b; border-color:#b8860b; color:#fff; }
 
@@ -227,7 +229,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v34</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v35</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -520,7 +522,28 @@ function artigoDoQR(txt) {
   if (!a) toast('Este código não está na lista: ' + id);
   return a;
 }
-function abrirPorCodigo(txt) { const a = artigoDoQR(txt); if (a) mostrar(a); }
+/* QR de peça sem tamanho (catálogo de QR): o texto é "SEMTAM:Tipo" → Atendimento › Entradas, janelinha dos estados */
+function tipoSemTamDoQR(txt) {
+  const m = String(txt).trim().match(/^SEMTAM:(.+)$/i);
+  if (!m) return null;
+  const t = tipoInfo(m[1].trim()) || tiposDePeca().find(x => semAcentos(x.tipo) === semAcentos(m[1].trim()));
+  if (!t) { toast('Tipo de peça desconhecido: ' + m[1]); return false; }
+  if (!t.vende) { toast(t.tipo + ': não se vende (não entra no atendimento).'); return false; }
+  return t;
+}
+async function abrirSemTamanho(t) {
+  if (TAB_ATUAL !== 'at') await irPara('at');
+  mudarModoAt('entrega');
+  filtroA.cat = t.grupo; filtroA.sub = t.tipo; filtroA.tam = [SEM_TAM]; pesqA.value = '';
+  ABERTO_A = 'esp:' + t.tipo; desenharFiltrosA(); listarA();
+  toast('⬇ Entrada sem tamanho: ' + t.tipo + ' — escolhe o estado');
+}
+function abrirPorCodigo(txt) {
+  const t = tipoSemTamDoQR(txt);
+  if (t) { abrirSemTamanho(t); return; }
+  if (t === false) return;
+  const a = artigoDoQR(txt); if (a) mostrar(a);
+}
 
 /* ---------- Filtros (categoria → tipo → tamanho) ---------- */
 const ORDEM_TAM = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
@@ -801,6 +824,9 @@ function mudarModoAt(m) {
 document.querySelectorAll('#modoAt button').forEach(b => b.onclick = () => mudarModoAt(b.dataset.m));
 // O QR mostra a peça na lista, com os botões dos estados para escolher
 document.getElementById('scanA').onclick = e => iniciarLeitor('leitorA', e.currentTarget, t => {
+  const st = tipoSemTamDoQR(t);
+  if (st) { abrirSemTamanho(st); return; }
+  if (st === false) return;
   const a = artigoDoQR(t); if (!a) return;
   if (a.vende === false) { toast(nomeArtigo(a) + ': não se vende (não entra no atendimento).'); return; }
   filtroA.cat = filtroA.sub = ''; filtroA.tam = []; desenharFiltrosA();
@@ -963,7 +989,7 @@ async function procurarTalao() {
     TALOES.forEach(t => {
       const li = document.createElement('li');
       if (t.fechado) li.className = 'fechado';
-      li.innerHTML = 'Nº <b>' + esc(t.canhao) + '</b>' + (t.livro ? ' · Canhão ' + esc(t.livro) : '') + ' · ' + nomeTalao(t) +
+      li.innerHTML = 'Nº <b>' + esc(t.canhao) + '</b>' + (t.livro ? ' · Canhão ' + esc(t.livro) : '') + ' · <b>' + esc(t.encarregado) + '</b>' + extrasTalao(t) +
         '<small>Saldo: <b>' + eur(t.saldo) + '</b>' + (t.fechado ? ' · fechado' : '') +
         ((t.observacoes || t.historico.length) ? ' · 📝' : '') + '</small>';
       if (!t.fechado) li.onclick = () => escolherTalao(t);
@@ -971,6 +997,20 @@ async function procurarTalao() {
     });
   } catch (e) { ul.innerHTML = '<li class="meta" style="cursor:default">Erro: ' + esc(e.message) + '</li>'; }
 }
+// Na lista: 📱 telemóvel e 🧒 aluno (nome ou nº) só aparecem como emoji; tocar mostra/esconde o dado (não escolhe o talão)
+function extrasTalao(t) {
+  const x = [];
+  if (String(t.telemovel || '').trim()) x.push(['📱', 'Telemóvel', t.telemovel]);
+  if (String(t.aluno || '').trim()) x.push(['🧒', 'Aluno', t.aluno]);
+  return x.map(([e, nome, v]) => ' <button type="button" class="extraT" title="' + nome + '" data-v="' + esc(String(v).trim()) + '">' + e + '</button>').join('');
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('.extraT');
+  if (!b) return;
+  ev.stopPropagation(); ev.preventDefault();
+  const aberto = b.classList.toggle('aberto');
+  b.textContent = aberto ? b.textContent.slice(0, 2) + ' ' + b.dataset.v : b.textContent.slice(0, 2);
+}, true);
 function nomeTalao(t) { return '<b>' + esc(t.encarregado) + '</b>' + (t.aluno ? ' (' + esc(t.aluno) + ')' : ''); }
 
 function escolherTalao(t) {
