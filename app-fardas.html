@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1f6f5c">
-<title>Stock de Fardas v36</title>
+<title>Stock de Fardas v37</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   /* ======================================================================
@@ -229,7 +229,7 @@
 
   <!-- ===== App ===== -->
   <section id="ecraApp" class="hidden">
-    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v36</small></h1><button class="sair" id="btnSair">sair</button></header>
+    <header><h1>👕 Stock de Fardas <small style="font-size:.7rem;color:var(--muted);font-weight:400">v37</small></h1><button class="sair" id="btnSair">sair</button></header>
 
     <nav class="tabs">
       <button data-tab="inv" class="sel">👕 Inventário</button>
@@ -353,7 +353,7 @@
       </div>
 
       <div class="card">
-        <div class="sec-tit">Últimos atendimentos <button id="btnHist" class="link" style="padding:0">atualizar</button></div>
+        <div class="sec-tit">Atendimentos de hoje <button id="btnHist" class="link" style="padding:0">atualizar</button></div>
         <ul id="hist"><li class="meta">—</li></ul>
       </div>
     </div>
@@ -1274,7 +1274,7 @@ async function carregarHist() {
   try {
     const r = await api('atendimentos');
     ul.innerHTML = '';
-    if (!r.atendimentos.length) { ul.innerHTML = '<li class="meta">Ainda não há atendimentos.</li>'; return; }
+    if (!r.atendimentos.length) { ul.innerHTML = '<li class="meta">Ainda não há atendimentos hoje.</li>'; return; }
     r.atendimentos.forEach(h => {
       const anulado = h.estado.indexOf('Anulado') === 0;
       const li = document.createElement('li');
