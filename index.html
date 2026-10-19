@@ -68,6 +68,9 @@
   .estado.pnl { background:#e8eefb; color:#284a8a; }
   .estado small { font-weight:400; }
   .tag.PNL { background:#e8eefb; color:#284a8a; }
+  .corrigir { margin-top:16px; border-top:1px solid var(--line); padding-top:10px; }
+  .corrigir summary { color:var(--muted); font-size:.9rem; cursor:pointer; }
+  .apagar { color:#b4432f !important; }
   .tag { display:inline-block; font-size:.72rem; padding:1px 7px; border-radius:999px; margin-left:4px; vertical-align:middle; }
   .tag.Por { background:#fff0c2; color:#7a5a00; } .tag.Aprovado { background:var(--ok); color:#155443; } .tag.Recusado { background:var(--no); color:#8a2c1f; }
   .form label { display:block; font-size:.9rem; margin-top:10px; color:var(--muted); }
@@ -89,7 +92,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 7</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 8</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -131,7 +134,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 7 · PNL de outros anos</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 8 · corrigir e apagar registos</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -382,7 +385,7 @@ let modo = 'entrada';   // 'entrada' ou 'saida'
 
 function cabecalhoEstado(l) {
   if (!l.antiga) return '<div class="estado ok">✔ Está na lista</div>';
-  if (l.estado === 'PNL') return '<div class="estado pnl">📖 PNL de outros anos · fora da lista atual' +
+  if (l.estado === 'PNL') return '<div class="estado pnl">📖 PNL de outros anos · válido, só não está na lista deste ano' +
     (l.ultimoPnl ? '<br><small>Último ano em que foi PNL: ' + esc(l.ultimoPnl) + '</small>' : '') + '</div>';
   if (l.estado === 'Aprovado') return '<div class="estado aprovado">🕰 Edição antiga · ✔ aprovada pelo professor</div>';
   if (l.estado === 'Recusado') return '<div class="estado recusado">🕰 Edição antiga · ✖ recusada pelo professor</div>';
@@ -415,8 +418,19 @@ function mostrar(livro, isbn) {
     (partes.length > 1 ? '<div>Que parte?</div><div class="chips" id="chips"></div>' : '') +
     '<div class="qtd"><button id="menos">−</button><span id="nq">1</span><button id="mais">+</button><span class="stock">unidade(s)</span></div>' +
     '<button id="btnAdd" class="btn btn-acc"></button>' +
-    '<p class="stock" id="stockAtual"></p>';
+    '<p class="stock" id="stockAtual"></p>' +
+    (atual.antiga ?
+      '<details class="corrigir"><summary>Registo errado? Corrigir ou apagar</summary>' +
+      '<button id="bMudarCat" class="btn btn-sec" style="width:100%;margin-top:10px">↔ Mudar para ' +
+        (atual.estado === 'PNL' ? '🕰 edição antiga de um manual' : '📖 livro PNL de outros anos') + '</button>' +
+      '<button id="bApagar" class="btn btn-sec apagar" style="width:100%;margin-top:8px">🗑 Apagar este registo</button>' +
+      '<p class="meta" style="margin-top:8px">Só é possível apagar com stock 0. Se já deste entrada, faz primeiro a saída.</p>' +
+      '</details>' : '');
   f.classList.remove('hidden');
+  if (atual.antiga) {
+    document.getElementById('bMudarCat').onclick = mudarCategoriaAntiga;
+    document.getElementById('bApagar').onclick = apagarAntiga;
+  }
   document.getElementById('mEntrada').onclick = () => mudarModo('entrada');
   document.getElementById('mSaida').onclick = () => mudarModo('saida');
   mudarModo('entrada');
@@ -581,6 +595,41 @@ async function mudarEstadoAntiga(estado) {
     mostrar(r.livro, r.livro.isbn);
   } catch (e) {
     toast(e instanceof SemRede ? 'É preciso rede para mudar o estado.' : 'Erro: ' + e.message);
+  }
+}
+
+async function mudarCategoriaAntiga() {
+  const nova = atual.estado === 'PNL' ? 'Edição antiga' : 'PNL de outros anos';
+  if (!confirm('Mudar "' + atual.titulo + '" para ' + (nova === 'PNL de outros anos' ? 'livro PNL de outros anos' : 'edição antiga de um manual') +
+      '? O stock mantém-se.')) return;
+  try {
+    const r = await api('categoriaAntiga', { isbn: atual.isbn, categoria: nova });
+    LIVROS = LIVROS.map(l => l.isbn === r.livro.isbn ? r.livro : l);
+    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+    contarAntigas();
+    toast(nova === 'PNL de outros anos' ? '📖 Passou a livro PNL de outros anos' : '🕰 Passou a edição antiga (por confirmar)');
+    mostrar(r.livro, r.livro.isbn);
+  } catch (e) {
+    toast(e instanceof SemRede ? 'É preciso rede para corrigir o registo.' : 'Erro: ' + e.message);
+  }
+}
+
+async function apagarAntiga() {
+  const partes = nomesPartes(atual.partes);
+  const total = partes.reduce((s, p) => s + (STOCK[atual.isbn + '|' + p] || 0), 0);
+  if (total > 0) { toast('Ainda há ' + total + ' em stock. Dá saída primeiro e depois apaga.'); return; }
+  if (lerFila().some(m => m.isbn === atual.isbn)) { toast('Há registos deste livro por enviar. Espera que sejam enviados.'); return; }
+  if (!confirm('Apagar o registo de "' + atual.titulo + '"? Esta ação não se pode desfazer.')) return;
+  try {
+    await api('apagarAntiga', { isbn: atual.isbn });
+    LIVROS = LIVROS.filter(l => l.isbn !== atual.isbn);
+    guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
+    contarAntigas();
+    document.getElementById('ficha').classList.add('hidden');
+    atual = null;
+    toast('🗑 Registo apagado');
+  } catch (e) {
+    toast(e instanceof SemRede ? 'É preciso rede para apagar o registo.' : 'Erro: ' + e.message);
   }
 }
 
