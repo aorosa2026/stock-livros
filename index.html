@@ -65,6 +65,9 @@
   .estado.antiga { background:#fff6db; color:#7a5a00; }
   .estado.aprovado { background:var(--ok); color:#155443; }
   .estado.recusado { background:var(--no); color:#8a2c1f; }
+  .estado.pnl { background:#e8eefb; color:#284a8a; }
+  .estado small { font-weight:400; }
+  .tag.PNL { background:#e8eefb; color:#284a8a; }
   .tag { display:inline-block; font-size:.72rem; padding:1px 7px; border-radius:999px; margin-left:4px; vertical-align:middle; }
   .tag.Por { background:#fff0c2; color:#7a5a00; } .tag.Aprovado { background:var(--ok); color:#155443; } .tag.Recusado { background:var(--no); color:#8a2c1f; }
   .form label { display:block; font-size:.9rem; margin-top:10px; color:var(--muted); }
@@ -86,7 +89,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 6</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 7</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -121,13 +124,14 @@
 
     <!-- Vista: edições antigas -->
     <div id="vistaAntigas" class="hidden">
-      <p class="meta">Livros com ISBN de edições anteriores. Têm de ser confirmados com o professor antes de serem usados.
+      <p class="meta">🕰 <strong>Edições antigas</strong> de manuais: têm de ser confirmadas com o professor antes de serem usadas.<br>
+        📖 <strong>PNL de outros anos</strong>: livros que já estiveram no PNL e podem voltar à lista.<br>
         Para registar um novo, lê o código (ou escreve o ISBN) no separador Leitura.</p>
       <ul id="listaAntigas" class="lista"></ul>
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 6 · leitura mais fiável</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 7 · PNL de outros anos</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -349,7 +353,8 @@ campo.addEventListener('input', () => {
   encontrados.slice(0, 25).forEach(l => {
       const li = document.createElement('li');
       li.innerHTML = esc(l.titulo) +
-        (l.antiga ? ' <span class="tag ' + l.estado.split(' ')[0] + '">🕰 ' + esc(l.estado.toLowerCase()) + '</span>' : '') +
+        (l.antiga ? (l.estado === 'PNL' ? ' <span class="tag PNL">📖 PNL outros anos</span>'
+          : ' <span class="tag ' + l.estado.split(' ')[0] + '">🕰 ' + esc(l.estado.toLowerCase()) + '</span>') : '') +
         '<small>' + realce(l.isbn, soNum ? q : '') + ' · ' +
         esc([l.disciplina, l.anos.join(', ')].filter(Boolean).join(' · ')) + '</small>';
       li.onclick = () => { ul.innerHTML = ''; campo.value = ''; mostrar(l, l.isbn); };
@@ -377,6 +382,8 @@ let modo = 'entrada';   // 'entrada' ou 'saida'
 
 function cabecalhoEstado(l) {
   if (!l.antiga) return '<div class="estado ok">✔ Está na lista</div>';
+  if (l.estado === 'PNL') return '<div class="estado pnl">📖 PNL de outros anos · fora da lista atual' +
+    (l.ultimoPnl ? '<br><small>Último ano em que foi PNL: ' + esc(l.ultimoPnl) + '</small>' : '') + '</div>';
   if (l.estado === 'Aprovado') return '<div class="estado aprovado">🕰 Edição antiga · ✔ aprovada pelo professor</div>';
   if (l.estado === 'Recusado') return '<div class="estado recusado">🕰 Edição antiga · ✖ recusada pelo professor</div>';
   return '<div class="estado antiga">🕰 Edição antiga · por confirmar com o professor</div>';
@@ -398,7 +405,8 @@ function mostrar(livro, isbn) {
     '<div class="meta">ISBN ' + esc(isbn) +
       esc([atual.disciplina, atual.antiga ? '' : atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) +
       (substitui ? '<br>Substitui: ' + esc(substitui.titulo) : '') + '</div>' +
-    (atual.antiga ?
+    (atual.antiga && atual.estado === 'PNL' && atual.notas ? '<div class="notas">' + esc(atual.notas) + '</div>' : '') +
+    (atual.antiga && atual.estado !== 'PNL' ?
       '<div class="linha-btns"><button id="bAprov" class="btn btn-sec">✔ Professor aprovou</button>' +
       '<button id="bRecus" class="btn btn-sec">✖ Professor recusou</button></div>' +
       (atual.notas ? '<div class="notas">' + esc(atual.notas) + '</div>' : '') +
@@ -430,7 +438,7 @@ function mostrar(livro, isbn) {
   document.getElementById('menos').onclick = () => { qtd = Math.max(1, qtd - 1); document.getElementById('nq').textContent = qtd; };
   document.getElementById('mais').onclick = () => { qtd++; document.getElementById('nq').textContent = qtd; };
   document.getElementById('btnAdd').onclick = adicionar;
-  if (atual.antiga) {
+  if (atual.antiga && atual.estado !== 'PNL') {
     document.getElementById('bAprov').onclick = () => mudarEstadoAntiga('Aprovado');
     document.getElementById('bRecus').onclick = () => mudarEstadoAntiga('Recusado');
   }
@@ -453,15 +461,47 @@ function mostrarNaoExiste(isbn) {
   f.innerHTML =
     '<div class="estado no">✖ Este ISBN não está na lista</div>' +
     '<div class="meta">ISBN ' + esc(isbn) + '</div>' +
-    '<p>É uma <strong>edição antiga</strong> de um livro da lista? Se sim, regista-a: fica marcada como ' +
-    '<em>por confirmar com o professor</em> e já podes dar entrada no stock.</p>' +
-    '<div class="linha-btns" id="pergAntiga"><button id="bSimAntiga" class="btn btn-acc">Sim, registar</button>' +
-    '<button id="bNaoAntiga" class="btn btn-sec">Não</button></div>' +
+    '<p>Queres registá-lo? Fica no separador 🕰 Antigas e já podes dar entrada no stock.</p>' +
+    '<div id="pergAntiga">' +
+    '<button id="bSimAntiga" class="btn btn-acc" style="margin-bottom:8px">🕰 Edição antiga de um manual</button>' +
+    '<button id="bSimPnl" class="btn btn-acc" style="margin-bottom:8px">📖 Livro PNL de outros anos</button>' +
+    '<button id="bNaoAntiga" class="btn btn-sec" style="width:100%">Não registar</button></div>' +
     '<div id="formAntiga" class="form hidden"></div>';
   f.classList.remove('hidden');
   document.getElementById('bNaoAntiga').onclick = () => f.classList.add('hidden');
   document.getElementById('bSimAntiga').onclick = () => formularioAntiga(isbn);
+  document.getElementById('bSimPnl').onclick = () => formularioPnl(isbn);
   f.scrollIntoView({ behavior: 'smooth' });
+}
+
+/** Livro PNL que já não está na lista: título, autor, ano e último ano letivo em que foi PNL. */
+function formularioPnl(isbn) {
+  document.getElementById('pergAntiga').classList.add('hidden');
+  const anos = [...new Set(LIVROS.filter(l => !l.antiga).flatMap(l => l.anos))].sort((a, b) => ordemAno(a) - ordemAno(b));
+  const fa = document.getElementById('formAntiga');
+  fa.innerHTML =
+    '<p class="meta" style="margin:0">📖 Livro PNL de outros anos</p>' +
+    '<label>Título *<input id="pTitulo" type="text" placeholder="ex.: O Principezinho"></label>' +
+    '<label>Autor<input id="pAutor" type="text"></label>' +
+    '<label>Disciplina<select id="pDisc"><option>Português (PNL)</option><option>Inglês</option><option value="">Outra / não sei</option></select></label>' +
+    '<label>Ano em que era lido<select id="pAno"><option value="">— não sei</option>' + anos.map(a => '<option>' + esc(a) + '</option>').join('') + '</select></label>' +
+    '<label>Último ano letivo em que foi PNL (se souberes)<input id="pUltimo" type="text" placeholder="ex.: 2023/24"></label>' +
+    '<div class="linha-btns"><button id="bGuardarPnl" class="btn btn-acc">Guardar livro PNL</button></div>';
+  fa.classList.remove('hidden');
+  document.getElementById('pTitulo').focus();
+  document.getElementById('bGuardarPnl').onclick = async () => {
+    const t = document.getElementById('pTitulo').value.trim();
+    const autor = document.getElementById('pAutor').value.trim();
+    if (!t) { toast('Escreve o título.'); return; }
+    await enviarAntiga(isbn, 'bGuardarPnl', 'Guardar livro PNL', {
+      categoria: 'PNL de outros anos',
+      titulo: autor ? t + ' - Autor: ' + autor : t,
+      disciplina: document.getElementById('pDisc').value,
+      ano: document.getElementById('pAno').value,
+      ultimoPnl: document.getElementById('pUltimo').value.trim(),
+      partes: 1
+    }, '📖 Livro PNL registado');
+  };
 }
 
 function formularioAntiga(isbn) {
@@ -504,24 +544,28 @@ function formularioAntiga(isbn) {
 async function guardarAntiga(isbn) {
   const titulo = document.getElementById('aTitulo').value.trim();
   if (!titulo) { toast('Escreve o título.'); return; }
-  const b = document.getElementById('bGuardarAntiga');
+  await enviarAntiga(isbn, 'bGuardarAntiga', 'Guardar edição antiga', {
+    categoria: 'Edição antiga', titulo,
+    ano: document.getElementById('aAno').value,
+    disciplina: document.getElementById('aDisc').value,
+    equivale: document.getElementById('aEquiv').value,
+    partes: Number(document.getElementById('aPartes').value) || 1
+  }, '🕰 Edição antiga registada — por confirmar com o professor');
+}
+
+async function enviarAntiga(isbn, idBotao, textoBotao, dados, msgOk) {
+  const b = document.getElementById(idBotao);
   b.disabled = true; b.textContent = 'A guardar…';
   try {
-    const r = await api('novaAntiga', {
-      isbn, titulo,
-      ano: document.getElementById('aAno').value,
-      disciplina: document.getElementById('aDisc').value,
-      equivale: document.getElementById('aEquiv').value,
-      partes: Number(document.getElementById('aPartes').value) || 1
-    });
+    const r = await api('novaAntiga', Object.assign({ isbn }, dados));
     LIVROS = LIVROS.filter(l => l.isbn !== r.livro.isbn).concat([r.livro]);
     guardar('stock_dados', JSON.stringify({ livros: LIVROS, stock: STOCK }));
     contarAntigas();
-    toast('🕰 Edição antiga registada — por confirmar com o professor');
+    toast(msgOk);
     mostrar(r.livro, r.livro.isbn);
   } catch (e) {
-    toast(e instanceof SemRede ? 'É preciso rede para registar uma edição antiga. Tenta quando houver ligação.' : 'Erro: ' + e.message);
-    b.disabled = false; b.textContent = 'Guardar edição antiga';
+    toast(e instanceof SemRede ? 'É preciso rede para registar este livro. Tenta quando houver ligação.' : 'Erro: ' + e.message);
+    b.disabled = false; b.textContent = textoBotao;
   }
 }
 
@@ -552,10 +596,11 @@ function desenharAntigas() {
   ul.innerHTML = '';
   const antigas = LIVROS.filter(l => l.antiga);
   if (!antigas.length) {
-    ul.innerHTML = '<li class="grupo">Ainda não há edições antigas registadas</li>';
+    ul.innerHTML = '<li class="grupo">Ainda não há livros registados aqui</li>';
     return;
   }
-  [['Por confirmar', 'Por confirmar com o professor'], ['Aprovado', 'Aprovadas'], ['Recusado', 'Recusadas']].forEach(([estado, titulo]) => {
+  [['Por confirmar', '🕰 Por confirmar com o professor'], ['Aprovado', '🕰 Aprovadas'], ['Recusado', '🕰 Recusadas'],
+   ['PNL', '📖 PNL de outros anos']].forEach(([estado, titulo]) => {
     const grupo = antigas.filter(l => l.estado === estado)
       .sort((a, b) => ordemAno(a.anos[0] || '') - ordemAno(b.anos[0] || '') || a.titulo.localeCompare(b.titulo));
     if (!grupo.length) return;
@@ -564,7 +609,8 @@ function desenharAntigas() {
       const partes = nomesPartes(l.partes);
       const valores = partes.map(p => STOCK[l.isbn + '|' + p] || 0);
       const li = document.createElement('li');
-      li.innerHTML = '<div>' + esc(l.titulo) + '<small>' + esc([l.anos.join(', '), l.disciplina, l.isbn].filter(Boolean).join(' · ')) + '</small></div>' +
+      li.innerHTML = '<div>' + esc(l.titulo) + '<small>' + esc([l.anos.join(', '), l.disciplina,
+          l.ultimoPnl ? 'último PNL: ' + l.ultimoPnl : '', l.isbn].filter(Boolean).join(' · ')) + '</small></div>' +
         '<div class="n' + (valores.some(v => v <= 0) ? ' zero' : '') + '">' +
         (partes.length > 1 ? partes.map((p, i) => 'P' + (i + 1) + ': ' + valores[i]).join('<br>') : valores[0]) + '</div>';
       li.onclick = () => mostrar(l, l.isbn);
