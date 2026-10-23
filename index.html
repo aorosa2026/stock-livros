@@ -62,6 +62,10 @@
   .cesto .erro { width:100%; color:#8a2c1f; font-size:.82rem; margin-top:4px; }
   @keyframes flash { from { background:#e3f2ec; } to { background:var(--card); } }
   .cesto li.novo { animation:flash 1.2s ease-out; }
+  /* Câmara das saídas mais baixa, e sem nada por cima dela enquanto se lê */
+  #leitorSaidas video { max-height:30vh; object-fit:cover; }
+  #vistaSaidas.a-ler .intro { display:none; }
+  #vistaSaidas.a-ler #resumoCesto { position:static; }
   .tab.sel { background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .mov { display:flex; gap:6px; margin:4px 0 12px; }
   .mov button { flex:1; border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px; font-size:.95rem; font-weight:600; color:var(--ink); cursor:pointer; }
@@ -105,7 +109,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 9</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 10</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -141,7 +145,7 @@
 
     <!-- Vista: saídas rápidas (várias de uma vez) -->
     <div id="vistaSaidas" class="hidden">
-      <p class="meta" style="margin-top:0">Lê os livros que a pessoa vai levar, um a um. Confirma a lista e carrega em <strong>Retirar do stock</strong>.</p>
+      <p class="meta intro" style="margin-top:0">Lê os livros que a pessoa vai levar, um a um. Confirma a lista e carrega em <strong>Retirar do stock</strong>.</p>
       <button id="btnLerSaidas" class="btn btn-acc">📷 Começar a ler</button>
       <div id="leitorSaidas" style="width:100%;margin-top:10px;border-radius:12px;overflow:hidden"></div>
       <p id="ultimoLido" class="meta" style="text-align:center;min-height:1.2em"></p>
@@ -167,7 +171,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 9 · saídas rápidas</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 10 · câmara das saídas</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -972,7 +976,10 @@ document.getElementById('btnLerSaidas').onclick = async () => {
     formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
     experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
   document.getElementById('btnLerSaidas').textContent = '⏸ Parar de ler';
-  const config = { fps: 15, qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.4, 150) }) };
+  document.getElementById('vistaSaidas').classList.add('a-ler');
+  // Formato largo (16:9): a imagem fica mais baixa e os códigos de barras cabem bem na horizontal
+  const config = { fps: 15, aspectRatio: 1.7778,
+    qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.6, 120) }) };
   const aoLer = txt => {
     const c = String(txt).replace(/\D/g, '');
     if (!isbnValido(c)) { lidoS = ''; repS = 0; return; }
@@ -989,11 +996,13 @@ document.getElementById('btnLerSaidas').onclick = async () => {
     try {
       await scannerSaidas.start({ facingMode: 'environment' }, Object.assign({}, config, {
         videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 },
-          advanced: [{ focusMode: 'continuous' }] } }), aoLer);
+          aspectRatio: { ideal: 1.7778 }, advanced: [{ focusMode: 'continuous' }] } }), aoLer);
     } catch (e1) {
       try { await scannerSaidas.stop(); } catch (e) {}
       await scannerSaidas.start({ facingMode: 'environment' }, config, aoLer);
     }
+    // Põe a câmara no topo do ecrã
+    setTimeout(() => document.getElementById('btnLerSaidas').scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
   } catch (e) {
     await pararLeitorSaidas();
     toast('Não foi possível abrir a câmara. Usa a pesquisa por números.');
@@ -1002,6 +1011,7 @@ document.getElementById('btnLerSaidas').onclick = async () => {
 async function pararLeitorSaidas() {
   if (scannerSaidas) { try { await scannerSaidas.stop(); } catch (e) {} try { scannerSaidas.clear(); } catch (e) {} scannerSaidas = null; }
   document.getElementById('btnLerSaidas').textContent = '📷 Começar a ler';
+  document.getElementById('vistaSaidas').classList.remove('a-ler');
 }
 
 function ordemAno(a) {
