@@ -15,6 +15,8 @@ Página para registar a entrada de manuais escolares no stock, a partir do telem
 A página lê e grava tudo na Google Sheet através do Apps Script, e só funciona com a
 palavra-passe definida na folha **Config** (célula B1).
 
+**Separadores da página:** 📷 Leitura (entrada/saída de um livro), 📋 Por ano, 🕰 Antigas (edições antigas e PNL de outros anos), 📤 Saídas (ler vários livros seguidos, confirmar a lista e retirar tudo do stock de uma vez — para momentos de maior afluência).
+
 **Sem rede:** os registos ficam guardados no telemóvel (aviso amarelo ⏳) e são enviados
 sozinhos quando houver ligação. Cada registo tem um código único (coluna **ID** em
 Movimentos), por isso um envio repetido nunca duplica linhas. Não apagar dados do browser

@@ -47,8 +47,21 @@
   .stock { font-size:.9rem; color:var(--muted); }
   #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; display:none; max-width:90%; text-align:center; }
   .fila { background:#fff6db; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:.9rem; margin:12px 0 0; }
-  .tabs { display:flex; gap:6px; background:#ebe7df; border-radius:12px; padding:4px; margin-bottom:14px; }
-  .tab { flex:1; border:0; background:none; padding:10px; border-radius:9px; font-size:.95rem; font-weight:600; color:var(--muted); cursor:pointer; }
+  .tabs { display:flex; gap:4px; background:#ebe7df; border-radius:12px; padding:4px; margin-bottom:14px; }
+  .tab { flex:1; border:0; background:none; padding:10px 2px; border-radius:9px; font-size:.82rem; font-weight:600; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .sug { list-style:none; padding:0; margin:8px 0 0; }
+  .sug li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
+  .sug li small { color:var(--muted); display:block; margin-top:2px; }
+  .cesto li { cursor:default; flex-wrap:wrap; }
+  .cesto li.problema { border-color:#e6b3aa; background:#fdf3f1; }
+  .cesto .ctl { display:flex; align-items:center; gap:6px; }
+  .cesto .ctl button { width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:1.1rem; color:var(--ink); }
+  .cesto .ctl span { min-width:22px; text-align:center; font-weight:700; }
+  .cesto .chips { margin:6px 0 0; width:100%; }
+  .cesto .chip { padding:5px 10px; font-size:.82rem; }
+  .cesto .erro { width:100%; color:#8a2c1f; font-size:.82rem; margin-top:4px; }
+  @keyframes flash { from { background:#e3f2ec; } to { background:var(--card); } }
+  .cesto li.novo { animation:flash 1.2s ease-out; }
   .tab.sel { background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .mov { display:flex; gap:6px; margin:4px 0 12px; }
   .mov button { flex:1; border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px; font-size:.95rem; font-weight:600; color:var(--ink); cursor:pointer; }
@@ -92,7 +105,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 8</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 9</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -102,6 +115,7 @@
       <button id="tabLeitura" class="tab sel">📷 Leitura</button>
       <button id="tabLista" class="tab">📋 Por ano</button>
       <button id="tabAntigas" class="tab">🕰 Antigas <span id="nAntigas" class="badge hidden"></span></button>
+      <button id="tabSaidas" class="tab">📤 Saídas <span id="nCesto" class="badge hidden"></span></button>
     </nav>
     <p id="fila" class="fila hidden"></p>
 
@@ -125,6 +139,25 @@
       <ul id="listaAno" class="lista"></ul>
     </div>
 
+    <!-- Vista: saídas rápidas (várias de uma vez) -->
+    <div id="vistaSaidas" class="hidden">
+      <p class="meta" style="margin-top:0">Lê os livros que a pessoa vai levar, um a um. Confirma a lista e carrega em <strong>Retirar do stock</strong>.</p>
+      <button id="btnLerSaidas" class="btn btn-acc">📷 Começar a ler</button>
+      <div id="leitorSaidas" style="width:100%;margin-top:10px;border-radius:12px;overflow:hidden"></div>
+      <p id="ultimoLido" class="meta" style="text-align:center;min-height:1.2em"></p>
+      <input id="pesqSaidas" type="search" placeholder="Não lê? Escreve parte do ISBN ou do título" autocomplete="off">
+      <ul id="sugSaidas" class="sug"></ul>
+      <ul id="listaCesto" class="lista cesto"></ul>
+      <div id="resumoCesto" class="card hidden" style="position:sticky;bottom:10px">
+        <div id="totalCesto" style="font-weight:700;font-size:1.05rem"></div>
+        <div id="avisoCesto" class="meta" style="margin:4px 0 0"></div>
+        <div class="linha-btns">
+          <button id="btnLimparCesto" class="btn btn-sec">Limpar</button>
+          <button id="btnConfirmarCesto" class="btn btn-acc btn-saida">Retirar do stock</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Vista: edições antigas -->
     <div id="vistaAntigas" class="hidden">
       <p class="meta">🕰 <strong>Edições antigas</strong> de manuais: têm de ser confirmadas com o professor antes de serem usadas.<br>
@@ -134,7 +167,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 8 · corrigir e apagar registos</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 9 · saídas rápidas</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -192,6 +225,7 @@ function mostrarApp(d, nome, atualizado) {
     const k = m.isbn + '|' + p; STOCK[k] = (STOCK[k] || 0) + m.qtd; }));
   mostrarFila();
   contarAntigas();
+  desenharCesto();
   document.getElementById('carregar').textContent = LIVROS.length + ' livros na lista · ' + nome +
     (atualizado ? '' : ' · a atualizar…');
   document.getElementById('ecraEntrada').classList.add('hidden');
@@ -787,14 +821,187 @@ document.getElementById('tabAntigas').onclick = () => mudarVista('antigas');
 let anoSel = '';
 
 function mudarVista(v) {
-  [['leitura', 'tabLeitura', 'vistaLeitura'], ['lista', 'tabLista', 'vistaLista'], ['antigas', 'tabAntigas', 'vistaAntigas']]
+  [['leitura', 'tabLeitura', 'vistaLeitura'], ['lista', 'tabLista', 'vistaLista'], ['antigas', 'tabAntigas', 'vistaAntigas'],
+   ['saidas', 'tabSaidas', 'vistaSaidas']]
     .forEach(([nome, tab, vista]) => {
       document.getElementById(tab).classList.toggle('sel', v === nome);
       document.getElementById(vista).classList.toggle('hidden', v !== nome);
     });
   if (v !== 'leitura') { pararLeitor(); window.scrollTo(0, 0); }
+  if (v !== 'saidas') pararLeitorSaidas();
   if (v === 'lista') desenharLista();
   if (v === 'antigas') desenharAntigas();
+  if (v === 'saidas') desenharCesto();
+}
+
+/* ======================= Saídas rápidas =======================
+   Lê vários livros seguidos para uma "lista de saída" (fica guardada no telemóvel),
+   confirma-se a lista e retira-se tudo do stock de uma vez. Os registos vão para a
+   mesma fila das saídas normais, por isso sem rede ficam à espera e seguem depois. */
+document.getElementById('tabSaidas').onclick = () => mudarVista('saidas');
+
+let CESTO = (() => { try { return JSON.parse(lerGuardado('stock_cesto') || '[]'); } catch (e) { return []; } })();
+function gravarCesto() { guardar('stock_cesto', JSON.stringify(CESTO)); desenharCesto(); }
+
+function adicionarCesto(isbn) {
+  const l = LIVROS.find(x => x.isbn === isbn);
+  const ja = CESTO.find(c => c.isbn === isbn);
+  if (ja) ja.qtd++;
+  else CESTO.unshift({
+    isbn, titulo: l ? l.titulo : '(não está na lista)', anos: l ? l.anos.join(', ') : '',
+    partesTotal: l ? (l.partes || 1) : 1, partes: nomesPartes(l ? l.partes : 1), qtd: 1, fora: !l, novo: true
+  });
+  if (ja) ja.novo = true;
+  const t = l ? l.titulo : 'ISBN ' + isbn + ' (não está na lista)';
+  document.getElementById('ultimoLido').textContent = '✔ ' + t + (ja ? ' (×' + ja.qtd + ')' : '');
+  gravarCesto();
+}
+
+/** Problemas de uma linha: fora da lista, sem partes escolhidas ou stock insuficiente. */
+function problemaLinha(c) {
+  if (c.fora) return 'Não está na lista: não pode sair do stock. Remove esta linha.';
+  if (!c.partes.length) return 'Escolhe pelo menos uma parte.';
+  const falta = c.partes.filter(p => (STOCK[c.isbn + '|' + p] || 0) < c.qtd);
+  if (falta.length) return falta.map(p => (p === 'Único' ? 'Só há ' : p + ': só há ') +
+    Math.max(0, STOCK[c.isbn + '|' + p] || 0) + ' em stock').join(' · ') +
+    '. Ajusta a quantidade, ou dá entrada primeiro se o stock estiver errado.';
+  return '';
+}
+
+function desenharCesto() {
+  const ul = document.getElementById('listaCesto');
+  ul.innerHTML = '';
+  CESTO.forEach((c, i) => {
+    const prob = problemaLinha(c);
+    const li = document.createElement('li');
+    li.className = (prob ? 'problema' : '') + (c.novo ? ' novo' : '');
+    const emStock = c.fora ? '' : ' · em stock: ' + nomesPartes(c.partesTotal)
+      .map(p => (c.partesTotal > 1 ? p.replace('Parte ', 'P') + ' ' : '') + Math.max(0, STOCK[c.isbn + '|' + p] || 0)).join(', ');
+    li.innerHTML = '<div style="flex:1;min-width:0">' + esc(c.titulo) +
+      '<small>' + esc([c.isbn, c.anos].filter(Boolean).join(' · ') + emStock) + '</small></div>' +
+      '<div class="ctl"><button data-a="menos">−</button><span>' + c.qtd + '</span><button data-a="mais">+</button>' +
+      '<button data-a="tirar" title="Remover">✕</button></div>' +
+      (c.partesTotal > 1 ? '<div class="chips">' + nomesPartes(c.partesTotal).map(p =>
+        '<button class="chip' + (c.partes.indexOf(p) >= 0 ? ' sel' : '') + '" data-p="' + p + '">' + p + '</button>').join('') + '</div>' : '') +
+      (prob ? '<div class="erro">⚠ ' + esc(prob) + '</div>' : '');
+    li.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      const a = b.getAttribute('data-a');
+      if (a === 'mais') c.qtd++;
+      if (a === 'menos') c.qtd = Math.max(1, c.qtd - 1);
+      if (a === 'tirar') CESTO.splice(i, 1);
+      gravarCesto();
+    });
+    li.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+      const p = b.getAttribute('data-p');
+      c.partes = c.partes.indexOf(p) >= 0 ? c.partes.filter(x => x !== p) : nomesPartes(c.partesTotal).filter(x => x === p || c.partes.indexOf(x) >= 0);
+      gravarCesto();
+    });
+    delete c.novo;
+    ul.appendChild(li);
+  });
+
+  const livros = CESTO.reduce((s, c) => s + c.qtd, 0);
+  const volumes = CESTO.reduce((s, c) => s + c.qtd * c.partes.length, 0);
+  const problemas = CESTO.filter(problemaLinha).length;
+  document.getElementById('resumoCesto').classList.toggle('hidden', !CESTO.length);
+  document.getElementById('totalCesto').textContent = '📚 ' + livros + ' livro' + (livros === 1 ? '' : 's') +
+    (volumes !== livros ? ' · ' + volumes + ' volumes' : '') + ' a sair';
+  document.getElementById('avisoCesto').textContent = problemas
+    ? '⚠ ' + problemas + ' linha(s) a vermelho por resolver' : 'Confirma com a pessoa se não falta nenhum livro.';
+  document.getElementById('btnConfirmarCesto').disabled = !!problemas;
+  const badge = document.getElementById('nCesto');
+  badge.textContent = livros; badge.classList.toggle('hidden', !livros);
+}
+
+document.getElementById('btnLimparCesto').onclick = () => {
+  if (!CESTO.length || !confirm('Limpar a lista sem retirar nada do stock?')) return;
+  CESTO = []; document.getElementById('ultimoLido').textContent = ''; gravarCesto();
+};
+
+document.getElementById('btnConfirmarCesto').onclick = () => {
+  if (!CESTO.length || CESTO.some(problemaLinha)) return;
+  const livros = CESTO.reduce((s, c) => s + c.qtd, 0);
+  if (!confirm('Retirar ' + livros + ' livro' + (livros === 1 ? '' : 's') + ' do stock?')) return;
+  pararLeitorSaidas();
+  const movs = CESTO.map(c => ({ id: novoId(), isbn: c.isbn, titulo: c.titulo, anos: c.anos, partes: c.partes.slice(), qtd: -c.qtd }));
+  gravarFila(lerFila().concat(movs));
+  movs.forEach(somarLocal);
+  CESTO = []; document.getElementById('ultimoLido').textContent = ''; gravarCesto();
+  toast(navigator.onLine === false
+    ? '📵 Sem rede: saída de ' + livros + ' livro' + (livros === 1 ? '' : 's') + ' guardada no telemóvel. Envia sozinho quando houver rede.'
+    : '－ ' + livros + ' livro' + (livros === 1 ? '' : 's') + ' retirado' + (livros === 1 ? '' : 's') + ' do stock');
+  enviarFila();
+};
+
+/* Pesquisa (quando o código não lê) */
+const pesqSaidas = document.getElementById('pesqSaidas');
+pesqSaidas.addEventListener('input', () => {
+  const bruto = pesqSaidas.value.trim(), ul = document.getElementById('sugSaidas');
+  ul.innerHTML = '';
+  if (bruto.length < 2) return;
+  const soNum = /^[\d\s-]+$/.test(bruto);
+  const q = soNum ? bruto.replace(/\D/g, '') : normal(bruto);
+  if (soNum && q.length === 13) {
+    if (!isbnValido(q)) { toast('ISBN inválido: confirma os números.'); return; }
+    adicionarCesto(q); pesqSaidas.value = ''; return;
+  }
+  const palavras = q.split(' ');
+  LIVROS.filter(l => soNum ? l.isbn.includes(q) : palavras.every(p => textoPesquisa(l).includes(p))).slice(0, 8).forEach(l => {
+    const li = document.createElement('li');
+    li.innerHTML = esc(l.titulo) + '<small>' + esc([l.isbn, l.anos.join(', ')].join(' · ')) + '</small>';
+    li.onclick = () => { ul.innerHTML = ''; pesqSaidas.value = ''; adicionarCesto(l.isbn); };
+    ul.appendChild(li);
+  });
+});
+
+/* Leitor contínuo: fica aberto e vai juntando livros à lista.
+   O mesmo código só volta a contar passados 2,5 s (para não duplicar sem querer). */
+let scannerSaidas = null, somCtx = null, lidoS = '', repS = 0, ultimoAceite = { c: '', t: 0 };
+function bip() {
+  try {
+    const o = somCtx.createOscillator(), g = somCtx.createGain();
+    o.frequency.value = 1200; g.gain.value = 0.08; o.connect(g); g.connect(somCtx.destination);
+    o.start(); o.stop(somCtx.currentTime + 0.08);
+  } catch (e) {}
+}
+document.getElementById('btnLerSaidas').onclick = async () => {
+  if (scannerSaidas) { await pararLeitorSaidas(); return; }
+  try { somCtx = somCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  lidoS = ''; repS = 0;
+  scannerSaidas = new Html5Qrcode('leitorSaidas', { verbose: false,
+    formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  document.getElementById('btnLerSaidas').textContent = '⏸ Parar de ler';
+  const config = { fps: 15, qrbox: (w, h) => ({ width: Math.min(w * 0.9, 340), height: Math.min(h * 0.4, 150) }) };
+  const aoLer = txt => {
+    const c = String(txt).replace(/\D/g, '');
+    if (!isbnValido(c)) { lidoS = ''; repS = 0; return; }
+    if (c === lidoS) repS++; else { lidoS = c; repS = 1; }
+    if (repS < LEITURAS_IGUAIS) return;
+    lidoS = ''; repS = 0;
+    if (c === ultimoAceite.c && Date.now() - ultimoAceite.t < 2500) return;   // o mesmo livro ainda à frente da câmara
+    ultimoAceite = { c, t: Date.now() };
+    if (navigator.vibrate) navigator.vibrate(60);
+    bip();
+    adicionarCesto(c);
+  };
+  try {
+    try {
+      await scannerSaidas.start({ facingMode: 'environment' }, Object.assign({}, config, {
+        videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 },
+          advanced: [{ focusMode: 'continuous' }] } }), aoLer);
+    } catch (e1) {
+      try { await scannerSaidas.stop(); } catch (e) {}
+      await scannerSaidas.start({ facingMode: 'environment' }, config, aoLer);
+    }
+  } catch (e) {
+    await pararLeitorSaidas();
+    toast('Não foi possível abrir a câmara. Usa a pesquisa por números.');
+  }
+};
+async function pararLeitorSaidas() {
+  if (scannerSaidas) { try { await scannerSaidas.stop(); } catch (e) {} try { scannerSaidas.clear(); } catch (e) {} scannerSaidas = null; }
+  document.getElementById('btnLerSaidas').textContent = '📷 Começar a ler';
 }
 
 function ordemAno(a) {
@@ -848,6 +1055,7 @@ function desenharLista() {
 function escreverStock() {
   if (!document.getElementById('vistaLista').classList.contains('hidden')) desenharLista();
   if (!document.getElementById('vistaAntigas').classList.contains('hidden')) desenharAntigas();
+  if (!document.getElementById('vistaSaidas').classList.contains('hidden')) desenharCesto();
   if (!atual || !document.getElementById('stockAtual')) return;
   const partes = nomesPartes(atual.partes);
   document.getElementById('stockAtual').textContent = 'Em stock: ' +
