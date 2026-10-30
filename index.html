@@ -63,6 +63,8 @@
   .cesto .erro { width:100%; color:#8a2c1f; font-size:.82rem; margin-top:4px; }
   @keyframes flash { from { background:#e3f2ec; } to { background:var(--card); } }
   .cesto li.novo { animation:flash 1.2s ease-out; }
+  .disc { display:inline-block; font-weight:700; font-size:.78rem; background:#e8eefb; color:#284a8a; border-radius:6px; padding:1px 7px; margin-right:2px; }
+  #ultimoLido { font-weight:600; color:var(--ink); }
   /* Câmara das saídas mais baixa, e sem nada por cima dela enquanto se lê */
   #leitorSaidas video { max-height:30vh; object-fit:cover; }
   #vistaSaidas.a-ler .intro { display:none; }
@@ -110,7 +112,7 @@
       <label>Palavra-passe<input id="pw" type="password" autocomplete="current-password"></label>
       <button id="btnEntrar" class="btn btn-acc" style="margin-top:14px">Entrar</button>
     </div>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 10</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 11</p>
   </section>
 
   <!-- ===== App ===== -->
@@ -172,7 +174,7 @@
     </div>
 
     <p id="carregar" class="meta">A carregar lista…</p>
-    <p class="meta" style="text-align:center;font-size:.75rem">versão 10 · câmara das saídas</p>
+    <p class="meta" style="text-align:center;font-size:.75rem">versão 11 · disciplina em destaque</p>
   </section>
 </main>
 <div id="msg"></div>
@@ -443,6 +445,7 @@ function mostrar(livro, isbn) {
 
   f.innerHTML =
     cabecalhoEstado(atual) +
+    (atual.disciplina ? '<span class="disc">' + esc(atual.disciplina) + '</span> ' : '') +
     '<strong>' + esc(atual.titulo) + '</strong>' +
     '<div class="meta">ISBN ' + esc(isbn) +
       esc([atual.disciplina, atual.antiga ? '' : atual.tipo, atual.anos.join(', ')].filter(Boolean).map(s => ' · ' + s).join('')) +
@@ -857,7 +860,8 @@ function adicionarCesto(isbn) {
     partesTotal: l ? (l.partes || 1) : 1, partes: nomesPartes(l ? l.partes : 1), qtd: 1, fora: !l, novo: true
   });
   if (ja) ja.novo = true;
-  const t = l ? l.titulo : 'ISBN ' + isbn + ' (não está na lista)';
+  const disc = l && l.disciplina ? l.disciplina + ' — ' : '';
+  const t = l ? disc + l.titulo : 'ISBN ' + isbn + ' (não está na lista)';
   document.getElementById('ultimoLido').textContent = '✔ ' + t + (ja ? ' (×' + ja.qtd + ')' : '');
   gravarCesto();
 }
@@ -882,7 +886,10 @@ function desenharCesto() {
     li.className = (prob ? 'problema' : '') + (c.novo ? ' novo' : '');
     const emStock = c.fora ? '' : ' · em stock: ' + nomesPartes(c.partesTotal)
       .map(p => (c.partesTotal > 1 ? p.replace('Parte ', 'P') + ' ' : '') + Math.max(0, STOCK[c.isbn + '|' + p] || 0)).join(', ');
-    li.innerHTML = '<div style="flex:1;min-width:0">' + esc(c.titulo) +
+    // Disciplina em destaque: vários manuais têm o mesmo título (ex.: "VAMOS - Manual" de Português, Matemática…)
+    const livro = LIVROS.find(x => x.isbn === c.isbn);
+    const disc = livro && livro.disciplina ? '<span class="disc">' + esc(livro.disciplina) + '</span> ' : '';
+    li.innerHTML = '<div style="flex:1;min-width:0">' + disc + esc(c.titulo) +
       '<small>' + esc([c.isbn, c.anos].filter(Boolean).join(' · ') + emStock) + '</small></div>' +
       '<div class="ctl"><button data-a="menos">−</button><span>' + c.qtd + '</span><button data-a="mais">+</button>' +
       '<button data-a="tirar" title="Remover">✕</button></div>' +
@@ -953,7 +960,8 @@ pesqSaidas.addEventListener('input', () => {
   const palavras = q.split(' ');
   LIVROS.filter(l => soNum ? l.isbn.includes(q) : palavras.every(p => textoPesquisa(l).includes(p))).slice(0, 8).forEach(l => {
     const li = document.createElement('li');
-    li.innerHTML = esc(l.titulo) + '<small>' + esc([l.isbn, l.anos.join(', ')].join(' · ')) + '</small>';
+    li.innerHTML = (l.disciplina ? '<span class="disc">' + esc(l.disciplina) + '</span> ' : '') + esc(l.titulo) +
+      '<small>' + esc([l.isbn, l.anos.join(', ')].join(' · ')) + '</small>';
     li.onclick = () => { ul.innerHTML = ''; pesqSaidas.value = ''; adicionarCesto(l.isbn); };
     ul.appendChild(li);
   });
