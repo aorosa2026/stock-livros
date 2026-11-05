@@ -15,7 +15,7 @@ Página para registar a entrada de manuais escolares no stock, a partir do telem
 A página lê e grava tudo na Google Sheet através do Apps Script, e só funciona com a
 palavra-passe definida na folha **Config** (célula B1).
 
-**Separadores da página:** 📷 Leitura (entrada/saída de um livro), 📋 Por ano, 🕰 Antigas (edições antigas e PNL de outros anos), 📤 Saídas (ler vários livros seguidos, confirmar a lista e retirar tudo do stock de uma vez — para momentos de maior afluência).
+**Separadores da página:** 📥 Entradas e 📤 Saídas (ler vários livros seguidos para uma lista — o mesmo livro lido outra vez soma uma unidade —, confirmar e dar entrada ou retirar tudo do stock de uma vez; nas Entradas há também a leitura por foto e o registo de livros que não estão na lista), 📋 Por ano, 🕰 Antigas (edições antigas e PNL de outros anos). Tocar num livro abre a sua ficha numa janela: entrada/saída de um só livro, aprovação do professor, corrigir ou apagar registos. No cabeçalho: **🔄 Avaliar** (livros em stock que deixaram de estar na lista — classificar como PNL de outros anos ou manual de edição antiga e ver o identificador a escrever na lombada, ex. *PNL 25/26*, *EA 25/26*) e **👕 Fardas** (abre a app de atendimento das fardas).
 
 **Sem rede:** os registos ficam guardados no telemóvel (aviso amarelo ⏳) e são enviados
 sozinhos quando houver ligação. Cada registo tem um código único (coluna **ID** em
@@ -29,19 +29,22 @@ nem carregar em "sair" enquanto houver registos por enviar.
 - **Correções** — ISBN errados no site do colégio e o ISBN certo (aplicadas ao gerar a lista).
 - **Lista** — gerada pelo menu *📚 Manuais → Gerar lista*. É a lista que a página usa.
 - **Edições antigas** — livros registados pela página quando se lê um ISBN que não está na lista. Não é apagada pelas atualizações do site. Na página aparecem no separador **🕰 Antigas**. Coluna *Categoria* (L):
-  - *Edição antiga* — edição anterior de um manual; coluna *Estado*: Por confirmar / Aprovado / Recusado (confirmação com o professor).
-  - *PNL de outros anos* — livro que já foi PNL e pode voltar à lista; coluna *Último ano PNL* (M) com o último ano letivo em que foi PNL, se se souber.
+  - *Edição antiga* — edição anterior de um manual; coluna *Estado*: Por confirmar / Aprovado / Recusado (confirmação com o professor). Coluna F: livro da lista atual que o substituiu (opcional).
+  - *PNL de outros anos* — livro que já foi PNL e pode voltar à lista.
+  - Coluna *Último ano na lista* (M): último ano letivo em que o livro esteve na lista; dá o identificador da lombada (*PNL 25/26*, *EA 25/26*).
   - Coluna *Stock* (K) é uma fórmula — não escrever por cima.
 - **Avisos** — problemas encontrados ao gerar a lista (❌ erro, 🧹 correção sem efeito, 🔎 verificar).
 - **Movimentos** — cada entrada ou saída (data, ISBN, parte, quantidade, quem registou, ID, Entrada/Saída). As saídas têm quantidade negativa.
 - **Stock** — total por ISBN e parte (fórmula, não editar).
-- **Config** — palavra-passe da página.
+- **Histórico de listas** — a Lista de cada ano letivo, guardada sempre que se gera a lista (substitui a desse ano letivo e mantém os anteriores). É usada pelo 🔄 Avaliar para sugerir a disciplina e o último ano letivo de cada livro.
+- **Config** — palavra-passe da página (B1) e ano letivo da lista atual (B3).
 
 ## Início de cada ano letivo
 
 1. Na Sheet: *📚 Manuais → 1. Atualizar do site do colégio* → **Sim** para gerar a lista.
 2. Atualizar a folha **Leituras e outros** com as leituras do novo ano.
-3. *📚 Manuais → 2. Gerar lista* e rever a folha **Avisos**; corrigir ISBN errados na folha **Correções**.
+3. *📚 Manuais → 2. Gerar lista*: confirmar o **ano letivo** da lista nova (fica guardada no Histórico de listas). Rever a folha **Avisos**; corrigir ISBN errados na folha **Correções**.
+4. Na página, **🔄 Avaliar**: classificar os livros em stock que saíram da lista e escrever o identificador nas lombadas.
 
 ## Se o link do Apps Script mudar
 
