@@ -32,6 +32,7 @@ nem carregar em "sair" enquanto houver registos por enviar.
   - *Edição antiga* — edição anterior de um manual; coluna *Estado*: Por confirmar / Aprovado / Recusado (confirmação com o professor). Coluna F: livro da lista atual que o substituiu (opcional).
   - *PNL de outros anos* — livro que já foi PNL e pode voltar à lista.
   - Coluna *Último ano na lista* (M): último ano letivo em que o livro esteve na lista; dá o identificador da lombada (*PNL 25/26*, *EA 25/26*).
+  - Os dados (colunas B–F e M) podem ser completados mais tarde: na página, ficha do livro → *Registo errado? Editar, corrigir ou apagar* → **✏ Editar dados**, ou diretamente na folha. Não mudar a coluna A (ISBN), que liga o livro ao stock.
   - Coluna *Stock* (K) é uma fórmula — não escrever por cima.
 - **Avisos** — problemas encontrados ao gerar a lista (❌ erro, 🧹 correção sem efeito, 🔎 verificar).
 - **Movimentos** — cada entrada ou saída (data, ISBN, parte, quantidade, quem registou, ID, Entrada/Saída). As saídas têm quantidade negativa.
