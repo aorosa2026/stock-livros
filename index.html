@@ -304,6 +304,8 @@ async function entrar(automatico) {
     guardar('stock_dados', JSON.stringify({ livros: d.livros, stock: d.stock, anoLetivo: d.anoLetivo, porClassificar: d.porClassificar }));
     mostrarApp(d, nome, true);
     enviarFila();
+    // MOLDURA: entrada escrita à mão → passa a palavra-passe às Fardas (a entrada automática não, para as Fardas continuarem a pedi-la cada dia)
+    if (automatico !== true && typeof NA_MOLDURA !== 'undefined' && NA_MOLDURA) window.parent.postMessage({ tipo: 'molduraPw', nome, pw }, location.origin);
   } catch (e) {
     if (/palavra-passe/i.test(e.message)) {
       // A palavra-passe mudou: volta ao ecrã de entrada
@@ -1250,6 +1252,24 @@ document.getElementById('btnFardas').onclick = () => {
   if (vazio) w.location.href = URL_FARDAS;     // 1.ª vez: carrega; depois só muda de separador
   try { w.focus(); } catch (e) {}
 };
+
+/* ---------- MOLDURA: app instalada "Banco de Fardas" (atendimento-fardas/app.html) ----------
+   Dentro da moldura: recebe a palavra-passe das Fardas e o 👕 troca de separador.
+   Aberta sozinha (pelo link de sempre) funciona exatamente como antes. */
+const NA_MOLDURA = (() => { try { return window.parent !== window && window.parent.location.origin === location.origin && !!window.parent.MOLDURA_FARDAS; } catch (e) { return false; } })();
+if (NA_MOLDURA) {
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || e.source !== window.parent) return;
+    const d = e.data || {};
+    if (d.tipo === 'molduraPw' && d.pw && !document.getElementById('ecraEntrada').classList.contains('hidden')) {
+      if (d.nome) document.getElementById('nome').value = d.nome;
+      document.getElementById('pw').value = d.pw;
+      entrar();
+    }
+  });
+  document.getElementById('btnFardas').onclick = () => window.parent.postMessage({ tipo: 'molduraIr', app: 'fardas' }, location.origin);
+  window.parent.postMessage({ tipo: 'molduraPronto', app: 'manuais' }, location.origin);
+}
 </script>
 </body>
 </html>
