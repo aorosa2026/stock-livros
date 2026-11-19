@@ -1174,8 +1174,10 @@ function realce(isbn, q) { if (!q) return esc(isbn); const i = isbn.indexOf(q); 
 /* Cópia da página no telemóvel para abrir sem rede (ver sw.js) */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-/* Entrada automática com a sessão guardada (no fim, para tudo já estar definido) */
-if (lerGuardado('stock_pw')) entrar(true);
+/* Entrada automática com a sessão guardada (no fim, para tudo já estar definido).
+   MOLDURA: dentro da app instalada não entra sozinha — espera a palavra-passe das Fardas (válida até à meia-noite) ou que a escrevam aqui */
+const DENTRO_MOLDURA = (() => { try { return window.parent !== window && window.parent.location.origin === location.origin && !!window.parent.MOLDURA_FARDAS; } catch (e) { return false; } })();
+if (lerGuardado('stock_pw') && !DENTRO_MOLDURA) entrar(true);
 
 function toast(t) { const m = document.getElementById('msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = 'none', 3200); }
 
@@ -1263,6 +1265,7 @@ if (NA_MOLDURA) {
     const d = e.data || {};
     if (d.tipo === 'molduraPw' && d.pw && !document.getElementById('ecraEntrada').classList.contains('hidden')) {
       if (d.nome) document.getElementById('nome').value = d.nome;
+      if (d.pw === lerGuardado('stock_pw')) { entrar(true); return; }   // mesma palavra-passe: entrada rápida com a lista guardada
       document.getElementById('pw').value = d.pw;
       entrar();
     }
